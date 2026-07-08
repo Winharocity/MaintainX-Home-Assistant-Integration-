@@ -58,6 +58,170 @@ SENSOR_DESCRIPTIONS: list[SensorEntityDescription] = [
 ]
 
 
+def _safe_get(obj: Any, key: str, default: Any = None) -> Any:
+    """Safely get a value from a dict or return default."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return default
+
+
+def _extract_work_order_detail(wo: dict[str, Any]) -> dict[str, Any]:
+    """Extract full detail from a work order for attributes."""
+    if not wo or not isinstance(wo, dict):
+        return {}
+
+    # Assignees
+    assignees_raw = wo.get("assignees", []) or []
+    assignee_list = []
+    for a in assignees_raw:
+        if isinstance(a, dict):
+            first = a.get("firstName", "") or ""
+            last = a.get("lastName", "") or ""
+            display = a.get("displayName", "") or f"{first} {last}".strip()
+            assignee_list.append({
+                "id": a.get("id"),
+                "name": display if display else "Unknown",
+                "email": a.get("email"),
+                "type": a.get("type"),
+            })
+
+    # Categories
+    categories = wo.get("categories", []) or []
+    if isinstance(categories, str):
+        categories = [categories]
+
+    # Asset
+    asset_raw = wo.get("asset")
+    asset_info = None
+    if isinstance(asset_raw, dict) and asset_raw:
+        asset_info = {
+            "id": asset_raw.get("id"),
+            "name": asset_raw.get("name", "Unknown"),
+            "description": asset_raw.get("description"),
+            "serial_number": asset_raw.get("serialNumber"),
+            "model": asset_raw.get("model"),
+            "make": asset_raw.get("make"),
+            "image_url": asset_raw.get("imageUrl"),
+        }
+
+    # Location
+    location_raw = wo.get("location")
+    location_info = None
+    if isinstance(location_raw, dict) and location_raw:
+        location_info = {
+            "id": location_raw.get("id"),
+            "name": location_raw.get("name", "Unknown"),
+            "address": location_raw.get("address"),
+        }
+
+    # Files / Images
+    files_raw = wo.get("files", []) or []
+    images = []
+    attachments = []
+    for f in files_raw:
+        if isinstance(f, dict):
+            file_info = {
+                "id": f.get("id"),
+                "name": f.get("name", "file"),
+                "url": f.get("url", ""),
+                "content_type": f.get("contentType", ""),
+                "created_at": f.get("createdAt"),
+            }
+            content_type = f.get("contentType", "") or ""
+            if content_type.startswith("image/"):
+                images.append(file_info)
+            else:
+                attachments.append(file_info)
+
+    # Checklist / Procedures
+    checklist_items = []
+    procedures = wo.get("procedures", []) or []
+    for proc in procedures:
+        if isinstance(proc, dict):
+            tasks = proc.get("tasks", proc.get("checklistItems", [])) or []
+            for task in tasks:
+                if isinstance(task, dict):
+                    checklist_items.append({
+                        "name": task.get("name", task.get("label", "Item")),
+                        "completed": task.get("completed", task.get("checked", False)),
+                        "type": task.get("type"),
+                    })
+
+    # Also check top-level checklistItems
+    top_checklist = wo.get("checklistItems", []) or []
+    for task in top_checklist:
+        if isinstance(task, dict):
+            checklist_items.append({
+                "name": task.get("name", task.get("label", "Item")),
+                "completed": task.get("completed", task.get("checked", False)),
+                "type": task.get("type"),
+            })
+
+    # Parts
+    parts_raw = wo.get("parts", []) or []
+    parts_list = []
+    for p in parts_raw:
+        if isinstance(p, dict):
+            parts_list.append({
+                "id": p.get("id"),
+                "name": p.get("name", "Part"),
+                "quantity": p.get("quantity"),
+                "unit_cost": p.get("unitCost"),
+                "total_cost": p.get("totalCost"),
+            })
+
+    # Time logs
+    time_raw = wo.get("timeLogs", []) or []
+    time_list = []
+    for t in time_raw:
+        if isinstance(t, dict):
+            user_data = t.get("user", {}) or {}
+            time_list.append({
+                "user": user_data.get("displayName", "Unknown") if isinstance(user_data, dict) else "Unknown",
+                "duration_minutes": t.get("durationInMinutes"),
+                "started_at": t.get("startedAt"),
+                "ended_at": t.get("endedAt"),
+                "hourly_rate": t.get("hourlyRate"),
+            })
+
+    # Created by
+    created_by_raw = wo.get("createdByUser")
+    created_by = None
+    if isinstance(created_by_raw, dict):
+        created_by = created_by_raw.get("displayName")
+
+    return {
+        "id": wo.get("id"),
+        "title": wo.get("title", "Untitled"),
+        "description": wo.get("description", ""),
+        "status": wo.get("status", "UNKNOWN"),
+        "priority": wo.get("priority", "NONE"),
+        "categories": categories,
+        "category": categories[0] if categories else None,
+        "work_order_number": wo.get("number"),
+        "created_at": wo.get("createdAt"),
+        "updated_at": wo.get("updatedAt"),
+        "completed_at": wo.get("completedAt"),
+        "due_date": wo.get("dueDate"),
+        "started_at": wo.get("startedAt"),
+        "estimated_duration": wo.get("estimatedDuration"),
+        "actual_duration": wo.get("actualDuration"),
+        "assignees": assignee_list,
+        "created_by": created_by,
+        "asset": asset_info,
+        "location": location_info,
+        "images": images,
+        "attachments": attachments,
+        "checklist": checklist_items,
+        "parts": parts_list,
+        "time_logs": time_list,
+        "total_cost": wo.get("totalCost"),
+        "labor_cost": wo.get("laborCost"),
+        "parts_cost": wo.get("partsCost"),
+        "additional_cost": wo.get("additionalCost"),
+    }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -107,12 +271,12 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
+        """Handle updated data."""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> int:
-        """Return the state of the sensor."""
+        """Return the state."""
         if self.coordinator.data is None:
             return 0
 
@@ -135,8 +299,6 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
         if self.coordinator.data is None:
             return {}
 
-        attrs: dict[str, Any] = {}
-
         key_map = {
             "total_work_orders": "work_orders",
             "open_work_orders": "open_work_orders",
@@ -150,19 +312,10 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
             orders = self.coordinator.data.get(data_key, [])
             work_order_list = []
             for wo in orders[:20]:
-                work_order_list.append(
-                    {
-                        "id": wo.get("id"),
-                        "title": wo.get("title"),
-                        "status": wo.get("status"),
-                        "priority": wo.get("priority"),
-                        "created_at": wo.get("createdAt"),
-                        "updated_at": wo.get("updatedAt"),
-                    }
-                )
-            attrs["work_orders"] = work_order_list
+                work_order_list.append(_extract_work_order_detail(wo))
+            return {"work_orders": work_order_list}
 
-        return attrs
+        return {}
 
 
 class MaintainXRecentWorkOrdersSensor(CoordinatorEntity, SensorEntity):
@@ -193,30 +346,14 @@ class MaintainXRecentWorkOrdersSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the last 25 work orders as attributes."""
+        """Return the last 25 work orders with full detail."""
         if self.coordinator.data is None:
             return {}
 
         orders = self.coordinator.data.get("work_orders", [])
         work_order_list = []
         for wo in orders[:25]:
-            work_order_list.append(
-                {
-                    "id": wo.get("id"),
-                    "title": wo.get("title"),
-                    "status": wo.get("status"),
-                    "priority": wo.get("priority"),
-                    "category": (
-                        wo.get("categories", [None])[0]
-                        if wo.get("categories")
-                        else None
-                    ),
-                    "created_at": wo.get("createdAt"),
-                    "updated_at": wo.get("updatedAt"),
-                    "completed_at": wo.get("completedAt"),
-                    "due_date": wo.get("dueDate"),
-                }
-            )
+            work_order_list.append(_extract_work_order_detail(wo))
 
         return {
             "recent_work_orders": work_order_list,
@@ -262,31 +399,11 @@ class MaintainXWorkOrderSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return work order details as attributes."""
+        """Return full work order details."""
         wo = self._get_work_order()
         if not wo:
             return {}
-
-        assignees = wo.get("assignees", [])
-        assignee_names = [a.get("displayName", "Unknown") for a in assignees]
-
-        return {
-            "work_order_id": wo.get("id"),
-            "title": wo.get("title"),
-            "description": wo.get("description"),
-            "status": wo.get("status"),
-            "priority": wo.get("priority"),
-            "categories": wo.get("categories", []),
-            "assignees": assignee_names,
-            "created_at": wo.get("createdAt"),
-            "updated_at": wo.get("updatedAt"),
-            "completed_at": wo.get("completedAt"),
-            "due_date": wo.get("dueDate"),
-            "asset_name": wo.get("asset", {}).get("name") if wo.get("asset") else None,
-            "location_name": (
-                wo.get("location", {}).get("name") if wo.get("location") else None
-            ),
-        }
+        return _extract_work_order_detail(wo)
 
     @property
     def icon(self) -> str:
