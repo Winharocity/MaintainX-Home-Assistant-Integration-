@@ -10,6 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_API_KEY, DOMAIN
 from .coordinator import MaintainXApiClient, MaintainXCoordinator
+from .dashboard import async_setup_dashboard, async_remove_dashboard
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register services
     await async_setup_services(hass)
 
+    # Create the dashboard and helpers
+    await async_setup_dashboard(hass)
+
     return True
 
 
@@ -45,9 +49,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    # Only unload services if no more entries
+    # Only unload services and remove dashboard if no more entries
     if not hass.data[DOMAIN]:
         async_unload_services(hass)
+        await async_remove_dashboard(hass)
         hass.data.pop(DOMAIN)
 
     return unload_ok
