@@ -23,100 +23,43 @@
       "name": "Create Work Order",
       "description": "Create a new work order (job) in MaintainX.",
       "fields": {
-        "title": {
-          "name": "Title",
-          "description": "The title of the work order."
-        },
-        "description": {
-          "name": "Description",
-          "description": "Detailed description of the work order."
-        },
-        "priority": {
-          "name": "Priority",
-          "description": "Priority level (NONE, LOW, MEDIUM, HIGH, CRITICAL)."
-        },
-        "category": {
-          "name": "Category",
-          "description": "Category of the work order."
-        },
-        "assignee_id": {
-          "name": "Assignee ID",
-          "description": "MaintainX user ID to assign."
-        },
-        "asset_id": {
-          "name": "Asset ID",
-          "description": "MaintainX asset ID to associate."
-        },
-        "location_id": {
-          "name": "Location ID",
-          "description": "MaintainX location ID."
-        }
+        "title": { "name": "Title", "description": "The title of the work order." },
+        "description": { "name": "Description", "description": "Detailed description." },
+        "priority": { "name": "Priority", "description": "Priority level." },
+        "category": { "name": "Category", "description": "Category of the work order." },
+        "assignee_id": { "name": "Assignee ID", "description": "User ID to assign." },
+        "asset_id": { "name": "Asset ID", "description": "Asset ID to associate." },
+        "location_id": { "name": "Location ID", "description": "Location ID." }
       }
     },
     "update_work_order": {
       "name": "Update Work Order",
-      "description": "Update an existing work order in MaintainX.",
+      "description": "Update an existing work order.",
       "fields": {
-        "work_order_id": {
-          "name": "Work Order ID",
-          "description": "The ID of the work order to update."
-        },
-        "title": {
-          "name": "Title",
-          "description": "New title."
-        },
-        "description": {
-          "name": "Description",
-          "description": "New description."
-        },
-        "priority": {
-          "name": "Priority",
-          "description": "New priority level."
-        },
-        "status": {
-          "name": "Status",
-          "description": "New status."
-        },
-        "category": {
-          "name": "Category",
-          "description": "New category."
-        },
-        "assignee_id": {
-          "name": "Assignee ID",
-          "description": "New assignee user ID."
-        },
-        "asset_id": {
-          "name": "Asset ID",
-          "description": "New asset ID."
-        },
-        "location_id": {
-          "name": "Location ID",
-          "description": "New location ID."
-        }
+        "work_order_id": { "name": "Work Order ID", "description": "ID of the work order." },
+        "title": { "name": "Title", "description": "New title." },
+        "description": { "name": "Description", "description": "New description." },
+        "priority": { "name": "Priority", "description": "New priority." },
+        "status": { "name": "Status", "description": "New status." },
+        "category": { "name": "Category", "description": "New category." },
+        "assignee_id": { "name": "Assignee ID", "description": "New assignee." },
+        "asset_id": { "name": "Asset ID", "description": "New asset." },
+        "location_id": { "name": "Location ID", "description": "New location." }
       }
     },
     "complete_work_order": {
       "name": "Complete Work Order",
       "description": "Mark a work order as done.",
       "fields": {
-        "work_order_id": {
-          "name": "Work Order ID",
-          "description": "The ID of the work order to complete."
-        }
+        "work_order_id": { "name": "Work Order ID", "description": "ID to complete." }
       }
     },
     "add_comment": {
       "name": "Add Comment",
       "description": "Add a comment to a work order.",
       "fields": {
-        "work_order_id": {
-          "name": "Work Order ID",
-          "description": "The ID of the work order."
-        },
-        "comment": {
-          "name": "Comment",
-          "description": "The comment text."
-        }
+        "work_order_id": { "name": "Work Order ID", "description": "ID of the work order." },
+        "comment": { "name": "Comment", "description": "The comment text." }
       }
     }
   }
