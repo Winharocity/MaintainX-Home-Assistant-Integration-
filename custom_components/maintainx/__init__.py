@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -10,7 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_API_KEY, DASHBOARD_ICON, DASHBOARD_TITLE, DASHBOARD_URL, DOMAIN
 from .coordinator import MaintainXApiClient, MaintainXCoordinator
-from .dashboard import async_create_dashboard_config, async_setup_input_helpers, async_setup_dashboard_automations
+from .dashboard import async_setup_input_helpers, async_setup_dashboard_automations, generate_dashboard_yaml
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,22 +37,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register services
     await async_setup_services(hass)
 
-    # Create input helpers (buttons, text fields, selects for the dashboard)
+    # Create input helpers
     await async_setup_input_helpers(hass)
 
     # Create automations for dashboard buttons
     await async_setup_dashboard_automations(hass)
 
-    # Register the dashboard panel in the sidebar
-    await async_create_dashboard_config(hass)
+    # Write the YAML dashboard file
+    yaml_path = hass.config.path("maintainx_dashboard.yaml")
+    if not os.path.exists(yaml_path):
+        await hass.async_add_executor_job(_write_dashboard_yaml, yaml_path)
+        _LOGGER.info("MaintainX dashboard YAML written to %s", yaml_path)
 
+    # Register the panel in the sidebar
     try:
         hass.components.frontend.async_register_built_in_panel(
             component_name="lovelace",
             sidebar_title=DASHBOARD_TITLE,
             sidebar_icon=DASHBOARD_ICON,
             frontend_url_path=DASHBOARD_URL,
-            config={"mode": "storage"},
+            config={
+                "mode": "yaml",
+                "filename": "maintainx_dashboard.yaml",
+            },
             require_admin=False,
         )
         _LOGGER.info("MaintainX dashboard registered in sidebar")
@@ -59,6 +67,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("Could not register MaintainX dashboard panel: %s", err)
 
     return True
+
+
+def _write_dashboard_yaml(yaml_path: str) -> None:
+    """Write the dashboard YAML file to disk."""
+    content = generate_dashboard_yaml()
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.write(content)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -71,7 +86,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data[DOMAIN]:
         async_unload_services(hass)
 
-        # Remove sidebar panel
         try:
             hass.components.frontend.async_remove_panel(DASHBOARD_URL)
             _LOGGER.info("MaintainX dashboard removed from sidebar")
