@@ -1,0 +1,123 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to MaintainX",
+        "description": "Enter your MaintainX API key. You can find this in MaintainX under Settings > API Keys.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key. Please check your MaintainX API key and try again.",
+      "cannot_connect": "Cannot connect to MaintainX API. Please check your internet connection.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This MaintainX account is already configured."
+    }
+  },
+  "services": {
+    "create_work_order": {
+      "name": "Create Work Order",
+      "description": "Create a new work order (job) in MaintainX.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "The title of the work order."
+        },
+        "description": {
+          "name": "Description",
+          "description": "Detailed description of the work order."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "Priority level (NONE, LOW, MEDIUM, HIGH, CRITICAL)."
+        },
+        "category": {
+          "name": "Category",
+          "description": "Category of the work order."
+        },
+        "assignee_id": {
+          "name": "Assignee ID",
+          "description": "MaintainX user ID to assign."
+        },
+        "asset_id": {
+          "name": "Asset ID",
+          "description": "MaintainX asset ID to associate."
+        },
+        "location_id": {
+          "name": "Location ID",
+          "description": "MaintainX location ID."
+        }
+      }
+    },
+    "update_work_order": {
+      "name": "Update Work Order",
+      "description": "Update an existing work order in MaintainX.",
+      "fields": {
+        "work_order_id": {
+          "name": "Work Order ID",
+          "description": "The ID of the work order to update."
+        },
+        "title": {
+          "name": "Title",
+          "description": "New title."
+        },
+        "description": {
+          "name": "Description",
+          "description": "New description."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "New priority level."
+        },
+        "status": {
+          "name": "Status",
+          "description": "New status."
+        },
+        "category": {
+          "name": "Category",
+          "description": "New category."
+        },
+        "assignee_id": {
+          "name": "Assignee ID",
+          "description": "New assignee user ID."
+        },
+        "asset_id": {
+          "name": "Asset ID",
+          "description": "New asset ID."
+        },
+        "location_id": {
+          "name": "Location ID",
+          "description": "New location ID."
+        }
+      }
+    },
+    "complete_work_order": {
+      "name": "Complete Work Order",
+      "description": "Mark a work order as done.",
+      "fields": {
+        "work_order_id": {
+          "name": "Work Order ID",
+          "description": "The ID of the work order to complete."
+        }
+      }
+    },
+    "add_comment": {
+      "name": "Add Comment",
+      "description": "Add a comment to a work order.",
+      "fields": {
+        "work_order_id": {
+          "name": "Work Order ID",
+          "description": "The ID of the work order."
+        },
+        "comment": {
+          "name": "Comment",
+          "description": "The comment text."
+        }
+      }
+    }
+  }
+}
