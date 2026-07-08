@@ -11,23 +11,23 @@ from .const import DASHBOARD_URL
 
 _LOGGER = logging.getLogger(__name__)
 
-LOVELACE_STORAGE_VERSION = 1
-LOVELACE_STORAGE_KEY = f"lovelace.{DASHBOARD_URL}"
-
 
 async def async_create_dashboard_config(hass: HomeAssistant) -> None:
     """Write the Lovelace dashboard config to storage."""
-    store = Store(hass, LOVELACE_STORAGE_VERSION, LOVELACE_STORAGE_KEY)
+    # The lovelace storage key must match exactly what HA expects
+    # Format: lovelace.{url_path}
+    store = Store(hass, 1, f"lovelace.{DASHBOARD_URL}")
 
     existing = await store.async_load()
     if existing:
-        _LOGGER.debug("MaintainX dashboard config already exists in storage")
+        _LOGGER.debug("MaintainX dashboard config already exists")
         return
 
     config = _build_dashboard_config()
 
-    await store.async_save({"data": config, "key": DASHBOARD_URL, "type": "storage"})
-    _LOGGER.info("MaintainX dashboard config saved to storage")
+    # This is the exact format HA Lovelace storage expects
+    await store.async_save(config)
+    _LOGGER.info("MaintainX dashboard config saved")
 
 
 async def async_setup_input_helpers(hass: HomeAssistant) -> None:
@@ -73,7 +73,6 @@ async def async_setup_input_helpers(hass: HomeAssistant) -> None:
     if changed:
         text_data["items"] = items
         await text_store.async_save(text_data)
-        _LOGGER.info("Created MaintainX input_text helpers")
 
     # --- input_select helpers ---
     select_store = Store(hass, 1, "input_select")
@@ -112,7 +111,6 @@ async def async_setup_input_helpers(hass: HomeAssistant) -> None:
     if changed:
         select_data["items"] = items
         await select_store.async_save(select_data)
-        _LOGGER.info("Created MaintainX input_select helpers")
 
     # --- input_button helpers ---
     button_store = Store(hass, 1, "input_button")
@@ -141,18 +139,17 @@ async def async_setup_input_helpers(hass: HomeAssistant) -> None:
     if changed:
         button_data["items"] = items
         await button_store.async_save(button_data)
-        _LOGGER.info("Created MaintainX input_button helpers")
 
-    # Reload all helper platforms so entities appear immediately
+    # Reload helper platforms
     for platform in ("input_text", "input_select", "input_button"):
         try:
             await hass.services.async_call(platform, "reload", blocking=True)
         except Exception:
-            _LOGGER.debug("Could not reload %s — will be available after restart", platform)
+            _LOGGER.debug("Could not reload %s", platform)
 
 
 async def async_setup_dashboard_automations(hass: HomeAssistant) -> None:
-    """Create automations that wire dashboard buttons to MaintainX services."""
+    """Create automations for dashboard buttons."""
     store = Store(hass, 1, "automations")
     existing_data = await store.async_load() or []
 
@@ -173,16 +170,14 @@ async def async_setup_dashboard_automations(hass: HomeAssistant) -> None:
 
     if changed:
         await store.async_save(existing_automations)
-        _LOGGER.info("Created MaintainX dashboard automations")
-
         try:
             await hass.services.async_call("automation", "reload", blocking=True)
         except Exception:
-            _LOGGER.debug("Could not reload automations — will be available after restart")
+            _LOGGER.debug("Could not reload automations")
 
 
 def _build_automations() -> list[dict[str, Any]]:
-    """Return list of automation configs for dashboard buttons."""
+    """Return automation configs for dashboard buttons."""
     return [
         {
             "id": "maintainx_submit_work_order",
@@ -212,8 +207,8 @@ def _build_automations() -> list[dict[str, Any]]:
         _quick_report_automation("maintainx_quick_report_hvac", "input_button.maintainx_report_hvac", "HVAC Issue Reported", "HVAC issue reported via HA dashboard", "HIGH", "CORRECTIVE", "❄️ HVAC issue reported!"),
         _quick_report_automation("maintainx_quick_report_plumbing", "input_button.maintainx_report_plumbing", "Plumbing Issue Reported", "Plumbing issue reported via HA dashboard", "HIGH", "CORRECTIVE", "🔧 Plumbing issue reported!"),
         _quick_report_automation("maintainx_quick_report_electrical", "input_button.maintainx_report_electrical", "Electrical Issue Reported", "Electrical issue reported via HA dashboard", "HIGH", "CORRECTIVE", "⚡ Electrical issue reported!"),
-        _quick_report_automation("maintainx_quick_report_safety", "input_button.maintainx_report_safety", "Safety Hazard Reported", "SAFETY HAZARD reported via HA dashboard — immediate attention required!", "CRITICAL", "SAFETY", "🛡️ Safety hazard reported!"),
-        _quick_report_automation("maintainx_quick_report_general", "input_button.maintainx_report_general", "General Maintenance Request", "General maintenance requested via HA dashboard", "LOW", "DEFAULT", "🔧 General maintenance request submitted!"),
+        _quick_report_automation("maintainx_quick_report_safety", "input_button.maintainx_report_safety", "Safety Hazard Reported", "SAFETY HAZARD reported via HA dashboard", "CRITICAL", "SAFETY", "🛡️ Safety hazard reported!"),
+        _quick_report_automation("maintainx_quick_report_general", "input_button.maintainx_report_general", "General Maintenance Request", "General maintenance requested via HA dashboard", "LOW", "DEFAULT", "🔧 Maintenance request submitted!"),
     ]
 
 
@@ -221,7 +216,7 @@ def _quick_report_automation(
     auto_id: str, entity_id: str, title: str, description: str,
     priority: str, category: str, notification_msg: str,
 ) -> dict[str, Any]:
-    """Build a quick-report automation dict."""
+    """Build a quick-report automation."""
     return {
         "id": auto_id,
         "alias": f"MaintainX: Quick Report - {title}",
@@ -244,222 +239,328 @@ def _quick_report_automation(
 
 
 def _build_dashboard_config() -> dict[str, Any]:
-    """Build the full Lovelace dashboard configuration."""
+    """Build the Lovelace dashboard config in the exact HA storage format."""
+    # This must be a dict with a "data" key containing "config" key
+    # matching what the Lovelace storage dashboard expects
     return {
-        "views": [
-            {
-                "title": "Overview",
-                "path": "overview",
-                "icon": "mdi:view-dashboard",
-                "cards": [
+        "data": {
+            "config": {
+                "title": "MaintainX",
+                "views": [
                     {
-                        "type": "markdown",
-                        "content": "# 🔧 MaintainX Dashboard",
-                    },
-                    {
-                        "type": "horizontal-stack",
-                        "cards": [
-                            {"type": "entity", "entity": "sensor.maintainx_open_work_orders", "name": "Open", "icon": "mdi:clipboard-alert"},
-                            {"type": "entity", "entity": "sensor.maintainx_in_progress_work_orders", "name": "In Progress", "icon": "mdi:clipboard-play"},
-                            {"type": "entity", "entity": "sensor.maintainx_on_hold_work_orders", "name": "On Hold", "icon": "mdi:clipboard-clock"},
-                            {"type": "entity", "entity": "sensor.maintainx_completed_work_orders", "name": "Completed", "icon": "mdi:clipboard-check"},
-                        ],
-                    },
-                    {
-                        "type": "horizontal-stack",
+                        "title": "Overview",
+                        "path": "overview",
+                        "icon": "mdi:view-dashboard",
+                        "badges": [],
                         "cards": [
                             {
-                                "type": "gauge",
-                                "entity": "sensor.maintainx_open_work_orders",
-                                "name": "Open Jobs",
-                                "min": 0,
-                                "max": 50,
-                                "severity": {"green": 0, "yellow": 10, "red": 25},
-                                "needle": True,
+                                "type": "markdown",
+                                "content": "# 🔧 MaintainX Dashboard",
                             },
                             {
-                                "type": "gauge",
-                                "entity": "sensor.maintainx_in_progress_work_orders",
-                                "name": "Active Jobs",
-                                "min": 0,
-                                "max": 50,
-                                "severity": {"green": 0, "yellow": 10, "red": 25},
-                                "needle": True,
+                                "type": "horizontal-stack",
+                                "cards": [
+                                    {
+                                        "type": "entity",
+                                        "entity": "sensor.maintainx_open_work_orders",
+                                        "name": "Open",
+                                        "icon": "mdi:clipboard-alert",
+                                    },
+                                    {
+                                        "type": "entity",
+                                        "entity": "sensor.maintainx_in_progress_work_orders",
+                                        "name": "In Progress",
+                                        "icon": "mdi:clipboard-play",
+                                    },
+                                    {
+                                        "type": "entity",
+                                        "entity": "sensor.maintainx_on_hold_work_orders",
+                                        "name": "On Hold",
+                                        "icon": "mdi:clipboard-clock",
+                                    },
+                                    {
+                                        "type": "entity",
+                                        "entity": "sensor.maintainx_completed_work_orders",
+                                        "name": "Completed",
+                                        "icon": "mdi:clipboard-check",
+                                    },
+                                ],
+                            },
+                            {
+                                "type": "horizontal-stack",
+                                "cards": [
+                                    {
+                                        "type": "gauge",
+                                        "entity": "sensor.maintainx_open_work_orders",
+                                        "name": "Open Jobs",
+                                        "min": 0,
+                                        "max": 50,
+                                        "severity": {
+                                            "green": 0,
+                                            "yellow": 10,
+                                            "red": 25,
+                                        },
+                                        "needle": True,
+                                    },
+                                    {
+                                        "type": "gauge",
+                                        "entity": "sensor.maintainx_in_progress_work_orders",
+                                        "name": "Active Jobs",
+                                        "min": 0,
+                                        "max": 50,
+                                        "severity": {
+                                            "green": 0,
+                                            "yellow": 10,
+                                            "red": 25,
+                                        },
+                                        "needle": True,
+                                    },
+                                ],
+                            },
+                            {
+                                "type": "markdown",
+                                "content": (
+                                    "## 📊 Summary\n\n"
+                                    "| Status | Count |\n"
+                                    "|--------|-------|\n"
+                                    "| 🔴 Open | {{ states('sensor.maintainx_open_work_orders') }} |\n"
+                                    "| 🟡 In Progress | {{ states('sensor.maintainx_in_progress_work_orders') }} |\n"
+                                    "| 🟠 On Hold | {{ states('sensor.maintainx_on_hold_work_orders') }} |\n"
+                                    "| 🟢 Completed | {{ states('sensor.maintainx_completed_work_orders') }} |\n"
+                                    "| **Total** | **{{ states('sensor.maintainx_total_work_orders') }}** |\n"
+                                ),
                             },
                         ],
                     },
                     {
-                        "type": "markdown",
-                        "content": (
-                            "## 📊 Summary\n\n"
-                            "| Status | Count |\n"
-                            "|--------|-------|\n"
-                            "| 🔴 Open | {{ states('sensor.maintainx_open_work_orders') }} |\n"
-                            "| 🟡 In Progress | {{ states('sensor.maintainx_in_progress_work_orders') }} |\n"
-                            "| 🟠 On Hold | {{ states('sensor.maintainx_on_hold_work_orders') }} |\n"
-                            "| 🟢 Completed | {{ states('sensor.maintainx_completed_work_orders') }} |\n"
-                            "| **Total** | **{{ states('sensor.maintainx_total_work_orders') }}** |\n"
-                        ),
-                    },
-                ],
-            },
-            {
-                "title": "Active Jobs",
-                "path": "active-jobs",
-                "icon": "mdi:clipboard-list",
-                "cards": [
-                    {
-                        "type": "markdown",
-                        "title": "🔴 Open Work Orders",
-                        "content": (
-                            "{% set orders = state_attr('sensor.maintainx_open_work_orders', 'work_orders') %}\n"
-                            "{% if orders and orders | length > 0 %}\n"
-                            "| # | Title | Priority | Created |\n"
-                            "|---|-------|----------|---------|\n"
-                            "{% for wo in orders[:20] %}\n"
-                            "| {{ wo.id }} | {{ wo.title }} | "
-                            "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
-                            "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
-                            "{% endfor %}\n"
-                            "{% else %}\n"
-                            "### ✅ No open work orders!\n"
-                            "{% endif %}\n"
-                        ),
-                    },
-                    {
-                        "type": "markdown",
-                        "title": "🟡 In Progress Work Orders",
-                        "content": (
-                            "{% set orders = state_attr('sensor.maintainx_in_progress_work_orders', 'work_orders') %}\n"
-                            "{% if orders and orders | length > 0 %}\n"
-                            "| # | Title | Priority | Created |\n"
-                            "|---|-------|----------|---------|\n"
-                            "{% for wo in orders[:20] %}\n"
-                            "| {{ wo.id }} | {{ wo.title }} | "
-                            "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
-                            "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
-                            "{% endfor %}\n"
-                            "{% else %}\n"
-                            "### No work orders in progress\n"
-                            "{% endif %}\n"
-                        ),
-                    },
-                    {
-                        "type": "markdown",
-                        "title": "🟠 On Hold Work Orders",
-                        "content": (
-                            "{% set orders = state_attr('sensor.maintainx_on_hold_work_orders', 'work_orders') %}\n"
-                            "{% if orders and orders | length > 0 %}\n"
-                            "| # | Title | Priority | Created |\n"
-                            "|---|-------|----------|---------|\n"
-                            "{% for wo in orders[:20] %}\n"
-                            "| {{ wo.id }} | {{ wo.title }} | "
-                            "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
-                            "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
-                            "{% endfor %}\n"
-                            "{% else %}\n"
-                            "### No work orders on hold\n"
-                            "{% endif %}\n"
-                        ),
-                    },
-                ],
-            },
-            {
-                "title": "Create Job",
-                "path": "create-job",
-                "icon": "mdi:clipboard-plus",
-                "cards": [
-                    {
-                        "type": "markdown",
-                        "content": "# ➕ Create New Work Order\nFill in the details below and press **Submit**.",
-                    },
-                    {
-                        "type": "entities",
-                        "title": "Work Order Details",
-                        "show_header_toggle": False,
-                        "entities": [
-                            {"entity": "input_text.maintainx_wo_title", "name": "Title", "icon": "mdi:format-title"},
-                            {"entity": "input_text.maintainx_wo_description", "name": "Description", "icon": "mdi:text"},
-                            {"entity": "input_select.maintainx_wo_priority", "name": "Priority", "icon": "mdi:alert-circle"},
-                            {"entity": "input_select.maintainx_wo_category", "name": "Category", "icon": "mdi:tag"},
-                        ],
-                    },
-                    {
-                        "type": "button",
-                        "entity": "input_button.maintainx_create_work_order",
-                        "name": "Submit Work Order",
-                        "icon": "mdi:send",
-                        "tap_action": {"action": "toggle"},
-                        "icon_height": "60px",
-                        "show_state": False,
-                    },
-                ],
-            },
-            {
-                "title": "Quick Report",
-                "path": "quick-report",
-                "icon": "mdi:lightning-bolt",
-                "cards": [
-                    {
-                        "type": "markdown",
-                        "content": "# ⚡ Quick Report\nTap a button to instantly create a work order.",
-                    },
-                    {
-                        "type": "horizontal-stack",
+                        "title": "Active Jobs",
+                        "path": "active-jobs",
+                        "icon": "mdi:clipboard-list",
+                        "badges": [],
                         "cards": [
-                            {"type": "button", "entity": "input_button.maintainx_report_printer", "name": "Printer", "icon": "mdi:printer-alert", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
-                            {"type": "button", "entity": "input_button.maintainx_report_hvac", "name": "HVAC", "icon": "mdi:hvac", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
-                            {"type": "button", "entity": "input_button.maintainx_report_plumbing", "name": "Plumbing", "icon": "mdi:water-pump", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
+                            {
+                                "type": "markdown",
+                                "title": "🔴 Open Work Orders",
+                                "content": (
+                                    "{% set orders = state_attr('sensor.maintainx_open_work_orders', 'work_orders') %}\n"
+                                    "{% if orders and orders | length > 0 %}\n"
+                                    "| # | Title | Priority | Created |\n"
+                                    "|---|-------|----------|---------|\n"
+                                    "{% for wo in orders[:20] %}\n"
+                                    "| {{ wo.id }} | {{ wo.title }} | "
+                                    "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
+                                    "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
+                                    "{% endfor %}\n"
+                                    "{% else %}\n"
+                                    "✅ No open work orders!\n"
+                                    "{% endif %}\n"
+                                ),
+                            },
+                            {
+                                "type": "markdown",
+                                "title": "🟡 In Progress",
+                                "content": (
+                                    "{% set orders = state_attr('sensor.maintainx_in_progress_work_orders', 'work_orders') %}\n"
+                                    "{% if orders and orders | length > 0 %}\n"
+                                    "| # | Title | Priority | Created |\n"
+                                    "|---|-------|----------|---------|\n"
+                                    "{% for wo in orders[:20] %}\n"
+                                    "| {{ wo.id }} | {{ wo.title }} | "
+                                    "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
+                                    "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
+                                    "{% endfor %}\n"
+                                    "{% else %}\n"
+                                    "No work orders in progress\n"
+                                    "{% endif %}\n"
+                                ),
+                            },
+                            {
+                                "type": "markdown",
+                                "title": "🟠 On Hold",
+                                "content": (
+                                    "{% set orders = state_attr('sensor.maintainx_on_hold_work_orders', 'work_orders') %}\n"
+                                    "{% if orders and orders | length > 0 %}\n"
+                                    "| # | Title | Priority | Created |\n"
+                                    "|---|-------|----------|---------|\n"
+                                    "{% for wo in orders[:20] %}\n"
+                                    "| {{ wo.id }} | {{ wo.title }} | "
+                                    "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
+                                    "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
+                                    "{% endfor %}\n"
+                                    "{% else %}\n"
+                                    "No work orders on hold\n"
+                                    "{% endif %}\n"
+                                ),
+                            },
                         ],
                     },
                     {
-                        "type": "horizontal-stack",
+                        "title": "Create Job",
+                        "path": "create-job",
+                        "icon": "mdi:clipboard-plus",
+                        "badges": [],
                         "cards": [
-                            {"type": "button", "entity": "input_button.maintainx_report_electrical", "name": "Electrical", "icon": "mdi:flash-alert", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
-                            {"type": "button", "entity": "input_button.maintainx_report_safety", "name": "Safety", "icon": "mdi:shield-alert", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
-                            {"type": "button", "entity": "input_button.maintainx_report_general", "name": "General", "icon": "mdi:wrench", "tap_action": {"action": "toggle"}, "icon_height": "50px", "show_state": False},
+                            {
+                                "type": "markdown",
+                                "content": "# ➕ Create New Work Order\nFill in the details and press **Submit**.",
+                            },
+                            {
+                                "type": "entities",
+                                "title": "Work Order Details",
+                                "show_header_toggle": False,
+                                "entities": [
+                                    {
+                                        "entity": "input_text.maintainx_wo_title",
+                                        "name": "Title",
+                                        "icon": "mdi:format-title",
+                                    },
+                                    {
+                                        "entity": "input_text.maintainx_wo_description",
+                                        "name": "Description",
+                                        "icon": "mdi:text",
+                                    },
+                                    {
+                                        "entity": "input_select.maintainx_wo_priority",
+                                        "name": "Priority",
+                                        "icon": "mdi:alert-circle",
+                                    },
+                                    {
+                                        "entity": "input_select.maintainx_wo_category",
+                                        "name": "Category",
+                                        "icon": "mdi:tag",
+                                    },
+                                ],
+                            },
+                            {
+                                "type": "button",
+                                "entity": "input_button.maintainx_create_work_order",
+                                "name": "Submit Work Order",
+                                "icon": "mdi:send",
+                                "tap_action": {"action": "toggle"},
+                                "icon_height": "60px",
+                                "show_state": False,
+                            },
+                        ],
+                    },
+                    {
+                        "title": "Quick Report",
+                        "path": "quick-report",
+                        "icon": "mdi:lightning-bolt",
+                        "badges": [],
+                        "cards": [
+                            {
+                                "type": "markdown",
+                                "content": "# ⚡ Quick Report\nTap a button to instantly create a work order.",
+                            },
+                            {
+                                "type": "horizontal-stack",
+                                "cards": [
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_printer",
+                                        "name": "Printer",
+                                        "icon": "mdi:printer-alert",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_hvac",
+                                        "name": "HVAC",
+                                        "icon": "mdi:hvac",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_plumbing",
+                                        "name": "Plumbing",
+                                        "icon": "mdi:water-pump",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                ],
+                            },
+                            {
+                                "type": "horizontal-stack",
+                                "cards": [
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_electrical",
+                                        "name": "Electrical",
+                                        "icon": "mdi:flash-alert",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_safety",
+                                        "name": "Safety",
+                                        "icon": "mdi:shield-alert",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                    {
+                                        "type": "button",
+                                        "entity": "input_button.maintainx_report_general",
+                                        "name": "General",
+                                        "icon": "mdi:wrench",
+                                        "tap_action": {"action": "toggle"},
+                                        "icon_height": "50px",
+                                        "show_state": False,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "title": "All Jobs",
+                        "path": "all-jobs",
+                        "icon": "mdi:clipboard-text-clock",
+                        "badges": [],
+                        "cards": [
+                            {
+                                "type": "markdown",
+                                "title": "📋 Recent Work Orders",
+                                "content": (
+                                    "{% set orders = state_attr('sensor.maintainx_recent_work_orders', 'recent_work_orders') %}\n"
+                                    "{% if orders and orders | length > 0 %}\n"
+                                    "| ID | Title | Status | Priority | Created |\n"
+                                    "|----|-------|--------|----------|---------|\n"
+                                    "{% for wo in orders %}\n"
+                                    "| {{ wo.id }} | {{ wo.title[:40] }} | "
+                                    "{% if wo.status == 'OPEN' %}🔴{% elif wo.status == 'IN_PROGRESS' %}🟡{% elif wo.status == 'ON_HOLD' %}🟠{% elif wo.status == 'DONE' %}🟢{% else %}⚪{% endif %} "
+                                    "{{ wo.status }} | "
+                                    "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
+                                    "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
+                                    "{% endfor %}\n"
+                                    "{% else %}\n"
+                                    "No work orders found\n"
+                                    "{% endif %}\n"
+                                ),
+                            },
+                            {
+                                "type": "entities",
+                                "title": "All Sensors",
+                                "entities": [
+                                    "sensor.maintainx_total_work_orders",
+                                    "sensor.maintainx_open_work_orders",
+                                    "sensor.maintainx_in_progress_work_orders",
+                                    "sensor.maintainx_on_hold_work_orders",
+                                    "sensor.maintainx_completed_work_orders",
+                                    "sensor.maintainx_recent_work_orders",
+                                ],
+                            },
                         ],
                     },
                 ],
-            },
-            {
-                "title": "All Jobs",
-                "path": "all-jobs",
-                "icon": "mdi:clipboard-text-clock",
-                "cards": [
-                    {
-                        "type": "markdown",
-                        "title": "📋 Recent Work Orders",
-                        "content": (
-                            "{% set orders = state_attr('sensor.maintainx_recent_work_orders', 'recent_work_orders') %}\n"
-                            "{% if orders and orders | length > 0 %}\n"
-                            "| ID | Title | Status | Priority | Created |\n"
-                            "|----|-------|--------|----------|---------|\n"
-                            "{% for wo in orders %}\n"
-                            "| {{ wo.id }} | {{ wo.title[:40] }} | "
-                            "{% if wo.status == 'OPEN' %}🔴{% elif wo.status == 'IN_PROGRESS' %}🟡{% elif wo.status == 'ON_HOLD' %}🟠{% elif wo.status == 'DONE' %}🟢{% else %}⚪{% endif %} "
-                            "{{ wo.status }} | "
-                            "{% if wo.priority == 'CRITICAL' %}🔴{% elif wo.priority == 'HIGH' %}🟠{% elif wo.priority == 'MEDIUM' %}🟡{% elif wo.priority == 'LOW' %}🟢{% else %}⚪{% endif %} "
-                            "{{ wo.priority }} | {{ wo.created_at[:10] if wo.created_at else 'N/A' }} |\n"
-                            "{% endfor %}\n"
-                            "{% else %}\n"
-                            "### No work orders found\n"
-                            "{% endif %}\n"
-                        ),
-                    },
-                    {
-                        "type": "entities",
-                        "title": "All Sensors",
-                        "entities": [
-                            "sensor.maintainx_total_work_orders",
-                            "sensor.maintainx_open_work_orders",
-                            "sensor.maintainx_in_progress_work_orders",
-                            "sensor.maintainx_on_hold_work_orders",
-                            "sensor.maintainx_completed_work_orders",
-                            "sensor.maintainx_recent_work_orders",
-                        ],
-                    },
-                ],
-            },
-        ],
+            }
+        },
+        "key": DASHBOARD_URL,
+        "type": "storage",
     }
