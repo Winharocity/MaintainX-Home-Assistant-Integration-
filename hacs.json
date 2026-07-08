@@ -1,0 +1,7 @@
+{
+  "name": "MaintainX",
+  "domains": ["sensor"],
+  "documentation": "https://github.com/yourusername/ha-maintainx",
+  "iot_class": "cloud_polling",
+  "render_readme": true
+}
