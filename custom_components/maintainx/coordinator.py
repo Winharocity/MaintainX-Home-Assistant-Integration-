@@ -27,7 +27,7 @@ class MaintainXApiClient:
         }
 
     async def async_validate_api_key(self) -> bool:
-        """Validate the API key by making a test request."""
+        """Validate the API key."""
         try:
             async with self._session.get(
                 f"{BASE_URL}/workorders?limit=1",
@@ -71,9 +71,7 @@ class MaintainXApiClient:
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientError as err:
-            raise UpdateFailed(
-                f"Error fetching work order {work_order_id}: {err}"
-            ) from err
+            raise UpdateFailed(f"Error fetching work order {work_order_id}: {err}") from err
 
     async def async_create_work_order(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new work order."""
@@ -101,9 +99,7 @@ class MaintainXApiClient:
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientError as err:
-            raise UpdateFailed(
-                f"Error updating work order {work_order_id}: {err}"
-            ) from err
+            raise UpdateFailed(f"Error updating work order {work_order_id}: {err}") from err
 
     async def async_add_comment(
         self, work_order_id: int, comment: str
@@ -118,9 +114,7 @@ class MaintainXApiClient:
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientError as err:
-            raise UpdateFailed(
-                f"Error adding comment to work order {work_order_id}: {err}"
-            ) from err
+            raise UpdateFailed(f"Error adding comment to work order {work_order_id}: {err}") from err
 
     async def async_get_assets(self, limit: int = 100) -> dict[str, Any]:
         """Get assets from MaintainX."""
@@ -182,7 +176,6 @@ class MaintainXCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from MaintainX API."""
         try:
-            # Fetch all work orders (paginate through all)
             all_work_orders = []
             cursor = None
             while True:
@@ -197,31 +190,19 @@ class MaintainXCoordinator(DataUpdateCoordinator):
 
             self.work_orders = all_work_orders
 
-            # Fetch assets
             assets_result = await self.client.async_get_assets()
             self.assets = assets_result.get("assets", [])
 
-            # Fetch locations
             locations_result = await self.client.async_get_locations()
             self.locations = locations_result.get("locations", [])
 
-            # Fetch users
             users_result = await self.client.async_get_users()
             self.users = users_result.get("users", [])
 
-            # Categorize work orders
-            open_orders = [
-                wo for wo in all_work_orders if wo.get("status") == "OPEN"
-            ]
-            in_progress_orders = [
-                wo for wo in all_work_orders if wo.get("status") == "IN_PROGRESS"
-            ]
-            on_hold_orders = [
-                wo for wo in all_work_orders if wo.get("status") == "ON_HOLD"
-            ]
-            done_orders = [
-                wo for wo in all_work_orders if wo.get("status") == "DONE"
-            ]
+            open_orders = [wo for wo in all_work_orders if wo.get("status") == "OPEN"]
+            in_progress_orders = [wo for wo in all_work_orders if wo.get("status") == "IN_PROGRESS"]
+            on_hold_orders = [wo for wo in all_work_orders if wo.get("status") == "ON_HOLD"]
+            done_orders = [wo for wo in all_work_orders if wo.get("status") == "DONE"]
 
             return {
                 "work_orders": all_work_orders,
