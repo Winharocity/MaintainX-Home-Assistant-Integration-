@@ -47,23 +47,24 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+ALL_PRIORITIES = [PRIORITY_NONE, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL]
+ALL_CATEGORIES = [
+    CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING,
+    CATEGORY_PREVENTIVE, CATEGORY_PROJECT, CATEGORY_SAFETY,
+    CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
+]
+ALL_STATUSES = [STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_DONE]
+
 CREATE_WORK_ORDER_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_TITLE): cv.string,
         vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
-        vol.Optional(ATTR_PRIORITY, default=PRIORITY_NONE): vol.In(
-            [PRIORITY_NONE, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL]
-        ),
-        vol.Optional(ATTR_CATEGORY, default=CATEGORY_DEFAULT): vol.In(
-            [
-                CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING,
-                CATEGORY_PREVENTIVE, CATEGORY_PROJECT, CATEGORY_SAFETY,
-                CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
-            ]
-        ),
+        vol.Optional(ATTR_PRIORITY, default=PRIORITY_NONE): vol.In(ALL_PRIORITIES),
+        vol.Optional(ATTR_CATEGORY, default=CATEGORY_DEFAULT): vol.In(ALL_CATEGORIES),
         vol.Optional(ATTR_ASSIGNEE_ID): cv.positive_int,
         vol.Optional(ATTR_ASSET_ID): cv.positive_int,
         vol.Optional(ATTR_LOCATION_ID): cv.positive_int,
+        vol.Optional("due_date"): cv.string,
     }
 )
 
@@ -72,22 +73,13 @@ UPDATE_WORK_ORDER_SCHEMA = vol.Schema(
         vol.Required(ATTR_WORK_ORDER_ID): cv.positive_int,
         vol.Optional(ATTR_TITLE): cv.string,
         vol.Optional(ATTR_DESCRIPTION): cv.string,
-        vol.Optional(ATTR_PRIORITY): vol.In(
-            [PRIORITY_NONE, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL]
-        ),
-        vol.Optional(ATTR_STATUS): vol.In(
-            [STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_DONE]
-        ),
-        vol.Optional(ATTR_CATEGORY): vol.In(
-            [
-                CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING,
-                CATEGORY_PREVENTIVE, CATEGORY_PROJECT, CATEGORY_SAFETY,
-                CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
-            ]
-        ),
+        vol.Optional(ATTR_PRIORITY): vol.In(ALL_PRIORITIES),
+        vol.Optional(ATTR_STATUS): vol.In(ALL_STATUSES),
+        vol.Optional(ATTR_CATEGORY): vol.In(ALL_CATEGORIES),
         vol.Optional(ATTR_ASSIGNEE_ID): cv.positive_int,
         vol.Optional(ATTR_ASSET_ID): cv.positive_int,
         vol.Optional(ATTR_LOCATION_ID): cv.positive_int,
+        vol.Optional("due_date"): cv.string,
     }
 )
 
@@ -123,6 +115,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             data["assetId"] = call.data[ATTR_ASSET_ID]
         if ATTR_LOCATION_ID in call.data:
             data["locationId"] = call.data[ATTR_LOCATION_ID]
+        if "due_date" in call.data and call.data["due_date"]:
+            data["dueDate"] = call.data["due_date"]
 
         for entry_id, coordinator in hass.data[DOMAIN].items():
             try:
@@ -159,6 +153,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             data["assetId"] = call.data[ATTR_ASSET_ID]
         if ATTR_LOCATION_ID in call.data:
             data["locationId"] = call.data[ATTR_LOCATION_ID]
+        if "due_date" in call.data and call.data["due_date"]:
+            data["dueDate"] = call.data["due_date"]
 
         for entry_id, coordinator in hass.data[DOMAIN].items():
             try:
@@ -200,18 +196,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 raise
             break
 
-    hass.services.async_register(
-        DOMAIN, SERVICE_CREATE_WORK_ORDER, async_create_work_order, schema=CREATE_WORK_ORDER_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_UPDATE_WORK_ORDER, async_update_work_order, schema=UPDATE_WORK_ORDER_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_COMPLETE_WORK_ORDER, async_complete_work_order, schema=COMPLETE_WORK_ORDER_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_ADD_COMMENT, async_add_comment, schema=ADD_COMMENT_SCHEMA,
-    )
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_WORK_ORDER, async_create_work_order, schema=CREATE_WORK_ORDER_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_UPDATE_WORK_ORDER, async_update_work_order, schema=UPDATE_WORK_ORDER_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_COMPLETE_WORK_ORDER, async_complete_work_order, schema=COMPLETE_WORK_ORDER_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_ADD_COMMENT, async_add_comment, schema=ADD_COMMENT_SCHEMA)
 
 
 @callback
