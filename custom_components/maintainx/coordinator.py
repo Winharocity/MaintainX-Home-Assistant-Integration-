@@ -58,9 +58,7 @@ class MaintainXApiClient:
                 params=params,
             ) as response:
                 response.raise_for_status()
-                data = await response.json()
-                _LOGGER.debug("Work orders list response keys: %s", list(data.keys()))
-                return data
+                return await response.json()
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Error fetching work orders: {err}") from err
 
@@ -71,24 +69,17 @@ class MaintainXApiClient:
                 f"{BASE_URL}/workorders/{work_order_id}",
                 headers=self._headers,
             ) as response:
+                if response.status == 429:
+                    _LOGGER.debug("Rate limited fetching WO %s", work_order_id)
+                    return None
                 if response.status != 200:
-                    _LOGGER.warning(
-                        "Got status %s fetching WO %s", response.status, work_order_id
-                    )
                     return None
                 data = await response.json()
-                _LOGGER.debug(
-                    "Single WO %s response keys: %s", work_order_id, list(data.keys())
-                )
-                # API might return {"workOrder": {...}} or just {...}
                 if "workOrder" in data:
                     return data["workOrder"]
                 return data
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Error fetching work order %s: %s", work_order_id, err)
-            return None
         except Exception as err:
-            _LOGGER.warning("Unexpected error fetching WO %s: %s", work_order_id, err)
+            _LOGGER.debug("Error fetching WO %s: %s", work_order_id, err)
             return None
 
     async def async_create_work_order(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -193,161 +184,122 @@ class MaintainXCoordinator(DataUpdateCoordinator):
         self.assets: list[dict[str, Any]] = []
         self.locations: list[dict[str, Any]] = []
         self.users: list[dict[str, Any]] = []
+        # Cache for detailed work orders so we don't refetch every cycle
+        self._detail_cache: dict[int, dict[str, Any]] = {}
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from MaintainX API."""
         try:
-            # Step 1: Get all work orders from list endpoint
-            all_work_orders_basic = []
+            # Step 1: Get all work orders from list endpoint (this is fast, 1-2 API calls)
+            all_work_orders = []
             cursor = None
 
-            try:
-                while True:
-                    result = await self.client.async_get_work_orders(
-                        limit=100, cursor=cursor
-                    )
-                    work_orders = result.get("workOrders", [])
-                    if not work_orders:
-                        _LOGGER.debug("No work orders returned in this page")
-                        break
-                    all_work_orders_basic.extend(work_orders)
-                    cursor = result.get("nextCursor")
-                    if not cursor:
-                        break
-            except Exception as err:
-                _LOGGER.error("Failed to fetch work orders list: %s", err)
-                raise UpdateFailed(f"Failed to fetch work orders: {err}") from err
-
-            _LOGGER.debug("Fetched %d work orders from list", len(all_work_orders_basic))
-
-            if not all_work_orders_basic:
-                _LOGGER.warning("No work orders returned from MaintainX API")
-                return {
-                    "work_orders": [],
-                    "open_work_orders": [],
-                    "in_progress_work_orders": [],
-                    "on_hold_work_orders": [],
-                    "done_work_orders": [],
-                    "total_count": 0,
-                    "open_count": 0,
-                    "in_progress_count": 0,
-                    "on_hold_count": 0,
-                    "done_count": 0,
-                    "assets": [],
-                    "locations": [],
-                    "users": [],
-                }
-
-            # Log first work order to see structure
-            if all_work_orders_basic:
-                first = all_work_orders_basic[0]
-                _LOGGER.debug(
-                    "First WO from list - keys: %s, id: %s, title: %s, status: %s",
-                    list(first.keys()),
-                    first.get("id"),
-                    first.get("title"),
-                    first.get("status"),
+            while True:
+                result = await self.client.async_get_work_orders(
+                    limit=100, cursor=cursor
                 )
+                work_orders = result.get("workOrders", [])
+                if not work_orders:
+                    break
+                all_work_orders.extend(work_orders)
+                cursor = result.get("nextCursor")
+                if not cursor:
+                    break
 
-            # Step 2: Find active work orders to fetch full details
-            active_ids = []
-            for wo in all_work_orders_basic:
-                status = wo.get("status", "")
-                if status in ("OPEN", "IN_PROGRESS", "ON_HOLD"):
-                    wo_id = wo.get("id")
-                    if wo_id:
-                        active_ids.append(wo_id)
+            _LOGGER.debug("Fetched %d work orders from list", len(all_work_orders))
 
-            # Also get last 10 completed
-            done_basic = [wo for wo in all_work_orders_basic if wo.get("status") == "DONE"]
-            for wo in done_basic[:10]:
+            # Step 2: Fetch details for ONLY a few key work orders (max 3 per cycle)
+            # Only fetch ones we haven't cached yet
+            open_and_active = [
+                wo for wo in all_work_orders
+                if wo.get("status") in ("OPEN", "IN_PROGRESS")
+            ]
+
+            ids_to_fetch = []
+            for wo in open_and_active:
                 wo_id = wo.get("id")
-                if wo_id and wo_id not in active_ids:
-                    active_ids.append(wo_id)
+                if wo_id and wo_id not in self._detail_cache:
+                    ids_to_fetch.append(wo_id)
 
-            _LOGGER.debug("Will fetch full details for %d work orders", len(active_ids))
+            # Only fetch 3 new details per update cycle to stay under rate limit
+            ids_to_fetch = ids_to_fetch[:3]
 
-            # Step 3: Fetch full details in batches
-            detailed_work_orders = {}
+            if ids_to_fetch:
+                _LOGGER.debug("Fetching details for %d new work orders", len(ids_to_fetch))
+                for wo_id in ids_to_fetch:
+                    await asyncio.sleep(2)  # 2 second gap between requests
+                    detail = await self.client.async_get_work_order(wo_id)
+                    if detail and isinstance(detail, dict) and detail.get("id"):
+                        self._detail_cache[wo_id] = detail
 
-            if active_ids:
-                batch_size = 5
-                for i in range(0, len(active_ids), batch_size):
-                    batch = active_ids[i:i + batch_size]
-                    tasks = [self.client.async_get_work_order(wo_id) for wo_id in batch]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    for wo_id, result in zip(batch, results):
-                        if isinstance(result, Exception):
-                            _LOGGER.warning("Failed to get details for WO %s: %s", wo_id, result)
-                            continue
-                        if result and isinstance(result, dict) and result.get("id"):
-                            detailed_work_orders[wo_id] = result
-                            _LOGGER.debug(
-                                "Got details for WO %s - keys: %s",
-                                wo_id,
-                                list(result.keys()),
-                            )
-                        else:
-                            _LOGGER.debug("Empty or invalid detail for WO %s", wo_id)
-
-                    if i + batch_size < len(active_ids):
-                        await asyncio.sleep(1)
-
-            _LOGGER.debug("Got full details for %d work orders", len(detailed_work_orders))
-
-            # Step 4: Merge detailed with basic
-            all_work_orders = []
-            for wo_basic in all_work_orders_basic:
-                wo_id = wo_basic.get("id")
-                if wo_id in detailed_work_orders:
-                    all_work_orders.append(detailed_work_orders[wo_id])
+            # Step 3: Merge — use cached detail if available, otherwise list data
+            merged_work_orders = []
+            for wo in all_work_orders:
+                wo_id = wo.get("id")
+                if wo_id in self._detail_cache:
+                    merged_work_orders.append(self._detail_cache[wo_id])
                 else:
-                    all_work_orders.append(wo_basic)
+                    merged_work_orders.append(wo)
 
-            self.work_orders = all_work_orders
+            self.work_orders = merged_work_orders
 
-            # Step 5: Fetch assets, locations, users (non-blocking, failures ok)
-            try:
-                assets_result = await self.client.async_get_assets()
-                self.assets = assets_result.get("assets", [])
-            except Exception:
-                self.assets = []
+            # Clean cache — remove work orders that no longer exist
+            current_ids = {wo.get("id") for wo in all_work_orders}
+            stale_ids = [k for k in self._detail_cache if k not in current_ids]
+            for k in stale_ids:
+                del self._detail_cache[k]
 
-            try:
-                locations_result = await self.client.async_get_locations()
-                self.locations = locations_result.get("locations", [])
-            except Exception:
-                self.locations = []
+            # Step 4: Fetch assets, locations, users (one per cycle to avoid rate limit)
+            # Rotate which one we fetch each cycle
+            cycle = getattr(self, "_fetch_cycle", 0)
 
-            try:
-                users_result = await self.client.async_get_users()
-                self.users = users_result.get("users", [])
-            except Exception:
-                self.users = []
+            if cycle == 0:
+                try:
+                    await asyncio.sleep(2)
+                    assets_result = await self.client.async_get_assets()
+                    self.assets = assets_result.get("assets", [])
+                except Exception:
+                    pass
+            elif cycle == 1:
+                try:
+                    await asyncio.sleep(2)
+                    locations_result = await self.client.async_get_locations()
+                    self.locations = locations_result.get("locations", [])
+                except Exception:
+                    pass
+            elif cycle == 2:
+                try:
+                    await asyncio.sleep(2)
+                    users_result = await self.client.async_get_users()
+                    self.users = users_result.get("users", [])
+                except Exception:
+                    pass
 
-            # Step 6: Categorize
-            open_orders = [wo for wo in all_work_orders if wo.get("status") == "OPEN"]
-            in_progress_orders = [wo for wo in all_work_orders if wo.get("status") == "IN_PROGRESS"]
-            on_hold_orders = [wo for wo in all_work_orders if wo.get("status") == "ON_HOLD"]
-            done_orders = [wo for wo in all_work_orders if wo.get("status") == "DONE"]
+            self._fetch_cycle = (cycle + 1) % 3
+
+            # Step 5: Categorize
+            open_orders = [wo for wo in merged_work_orders if wo.get("status") == "OPEN"]
+            in_progress_orders = [wo for wo in merged_work_orders if wo.get("status") == "IN_PROGRESS"]
+            on_hold_orders = [wo for wo in merged_work_orders if wo.get("status") == "ON_HOLD"]
+            done_orders = [wo for wo in merged_work_orders if wo.get("status") == "DONE"]
 
             _LOGGER.info(
-                "MaintainX update complete: %d total (%d open, %d in progress, %d on hold, %d done)",
-                len(all_work_orders),
+                "MaintainX: %d total (%d open, %d active, %d hold, %d done) | %d cached details",
+                len(merged_work_orders),
                 len(open_orders),
                 len(in_progress_orders),
                 len(on_hold_orders),
                 len(done_orders),
+                len(self._detail_cache),
             )
 
             return {
-                "work_orders": all_work_orders,
+                "work_orders": merged_work_orders,
                 "open_work_orders": open_orders,
                 "in_progress_work_orders": in_progress_orders,
                 "on_hold_work_orders": on_hold_orders,
                 "done_work_orders": done_orders,
-                "total_count": len(all_work_orders),
+                "total_count": len(merged_work_orders),
                 "open_count": len(open_orders),
                 "in_progress_count": len(in_progress_orders),
                 "on_hold_count": len(on_hold_orders),
@@ -359,5 +311,5 @@ class MaintainXCoordinator(DataUpdateCoordinator):
         except UpdateFailed:
             raise
         except Exception as err:
-            _LOGGER.error("Unexpected error in MaintainX update: %s", err, exc_info=True)
-            raise UpdateFailed(f"Error communicating with MaintainX API: {err}") from err
+            _LOGGER.error("MaintainX update error: %s", err, exc_info=True)
+            raise UpdateFailed(f"Error: {err}") from err
