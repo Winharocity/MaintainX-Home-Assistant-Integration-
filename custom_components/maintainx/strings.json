@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to MaintainX",
+        "description": "Enter your MaintainX API key. You can find this in MaintainX under Settings > API Keys.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key. Please check your MaintainX API key and try again.",
+      "cannot_connect": "Cannot connect to MaintainX API. Please check your internet connection.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This MaintainX account is already configured."
+    }
+  }
+}
