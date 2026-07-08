@@ -12,6 +12,10 @@ BASE_URL: Final = "https://api.getmaintainx.com/v1"
 
 DEFAULT_SCAN_INTERVAL: Final = timedelta(minutes=5)
 
+DASHBOARD_URL: Final = "maintainx-dashboard"
+DASHBOARD_TITLE: Final = "MaintainX"
+DASHBOARD_ICON: Final = "mdi:wrench-clock"
+
 # Work Order Statuses
 STATUS_OPEN: Final = "OPEN"
 STATUS_IN_PROGRESS: Final = "IN_PROGRESS"
@@ -53,3 +57,16 @@ ATTR_ASSIGNEE_ID: Final = "assignee_id"
 ATTR_ASSET_ID: Final = "asset_id"
 ATTR_LOCATION_ID: Final = "location_id"
 ATTR_COMMENT: Final = "comment"
+
+# Input helpers created by the integration
+INPUT_TEXT_WO_TITLE: Final = "input_text.maintainx_wo_title"
+INPUT_TEXT_WO_DESCRIPTION: Final = "input_text.maintainx_wo_description"
+INPUT_SELECT_WO_PRIORITY: Final = "input_select.maintainx_wo_priority"
+INPUT_SELECT_WO_CATEGORY: Final = "input_select.maintainx_wo_category"
+INPUT_BUTTON_CREATE_WO: Final = "input_button.maintainx_create_work_order"
+INPUT_BUTTON_PRINTER: Final = "input_button.maintainx_report_printer"
+INPUT_BUTTON_HVAC: Final = "input_button.maintainx_report_hvac"
+INPUT_BUTTON_PLUMBING: Final = "input_button.maintainx_report_plumbing"
+INPUT_BUTTON_ELECTRICAL: Final = "input_button.maintainx_report_electrical"
+INPUT_BUTTON_GENERAL: Final = "input_button.maintainx_report_general"
+INPUT_BUTTON_SAFETY: Final = "input_button.maintainx_report_safety"
