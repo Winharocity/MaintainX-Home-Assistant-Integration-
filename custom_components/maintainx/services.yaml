@@ -13,7 +13,7 @@ create_work_order:
       name: Description
       description: Detailed description of the work order
       required: false
-      example: "The main office printer is showing low ink warning. Replace all cartridges."
+      example: "The main office printer is showing low ink warning."
       selector:
         text:
           multiline: true
@@ -22,7 +22,6 @@ create_work_order:
       description: Priority level of the work order
       required: false
       default: "NONE"
-      example: "HIGH"
       selector:
         select:
           options:
@@ -36,7 +35,6 @@ create_work_order:
       description: Category of the work order
       required: false
       default: "DEFAULT"
-      example: "CORRECTIVE"
       selector:
         select:
           options:
@@ -51,27 +49,24 @@ create_work_order:
             - "DEFAULT"
     assignee_id:
       name: Assignee ID
-      description: The MaintainX user ID to assign the work order to
+      description: The MaintainX user ID to assign
       required: false
-      example: 12345
       selector:
         number:
           min: 1
           mode: box
     asset_id:
       name: Asset ID
-      description: The MaintainX asset ID to associate with the work order
+      description: The MaintainX asset ID to associate
       required: false
-      example: 67890
       selector:
         number:
           min: 1
           mode: box
     location_id:
       name: Location ID
-      description: The MaintainX location ID for the work order
+      description: The MaintainX location ID
       required: false
-      example: 11111
       selector:
         number:
           min: 1
@@ -85,7 +80,6 @@ update_work_order:
       name: Work Order ID
       description: The ID of the work order to update
       required: true
-      example: 12345
       selector:
         number:
           min: 1
@@ -98,7 +92,7 @@ update_work_order:
         text:
     description:
       name: Description
-      description: New description for the work order
+      description: New description
       required: false
       selector:
         text:
@@ -117,7 +111,7 @@ update_work_order:
             - "CRITICAL"
     status:
       name: Status
-      description: New status for the work order
+      description: New status
       required: false
       selector:
         select:
@@ -169,13 +163,12 @@ update_work_order:
 
 complete_work_order:
   name: Complete Work Order
-  description: Mark a work order as complete/done in MaintainX
+  description: Mark a work order as complete/done
   fields:
     work_order_id:
       name: Work Order ID
       description: The ID of the work order to complete
       required: true
-      example: 12345
       selector:
         number:
           min: 1
@@ -183,13 +176,12 @@ complete_work_order:
 
 add_comment:
   name: Add Comment to Work Order
-  description: Add a comment to an existing work order in MaintainX
+  description: Add a comment to an existing work order
   fields:
     work_order_id:
       name: Work Order ID
       description: The ID of the work order to comment on
       required: true
-      example: 12345
       selector:
         number:
           min: 1
@@ -198,7 +190,6 @@ add_comment:
       name: Comment
       description: The comment text to add
       required: true
-      example: "Ink cartridges have been ordered and will arrive tomorrow."
       selector:
         text:
           multiline: true
