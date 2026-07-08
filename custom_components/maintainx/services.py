@@ -56,15 +56,9 @@ CREATE_WORK_ORDER_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_CATEGORY, default=CATEGORY_DEFAULT): vol.In(
             [
-                CATEGORY_DAMAGE,
-                CATEGORY_INSPECTION,
-                CATEGORY_METER_READING,
-                CATEGORY_PREVENTIVE,
-                CATEGORY_PROJECT,
-                CATEGORY_SAFETY,
-                CATEGORY_UPGRADE,
-                CATEGORY_CORRECTIVE,
-                CATEGORY_DEFAULT,
+                CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING,
+                CATEGORY_PREVENTIVE, CATEGORY_PROJECT, CATEGORY_SAFETY,
+                CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
             ]
         ),
         vol.Optional(ATTR_ASSIGNEE_ID): cv.positive_int,
@@ -86,15 +80,9 @@ UPDATE_WORK_ORDER_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_CATEGORY): vol.In(
             [
-                CATEGORY_DAMAGE,
-                CATEGORY_INSPECTION,
-                CATEGORY_METER_READING,
-                CATEGORY_PREVENTIVE,
-                CATEGORY_PROJECT,
-                CATEGORY_SAFETY,
-                CATEGORY_UPGRADE,
-                CATEGORY_CORRECTIVE,
-                CATEGORY_DEFAULT,
+                CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING,
+                CATEGORY_PREVENTIVE, CATEGORY_PROJECT, CATEGORY_SAFETY,
+                CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
             ]
         ),
         vol.Optional(ATTR_ASSIGNEE_ID): cv.positive_int,
@@ -121,7 +109,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up MaintainX services."""
 
     async def async_create_work_order(call: ServiceCall) -> None:
-        """Create a new work order in MaintainX."""
+        """Create a new work order."""
         data: dict[str, Any] = {
             "title": call.data[ATTR_TITLE],
             "description": call.data.get(ATTR_DESCRIPTION, ""),
@@ -131,14 +119,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         if ATTR_ASSIGNEE_ID in call.data:
             data["assignees"] = [{"type": "USER", "id": call.data[ATTR_ASSIGNEE_ID]}]
-
         if ATTR_ASSET_ID in call.data:
             data["assetId"] = call.data[ATTR_ASSET_ID]
-
         if ATTR_LOCATION_ID in call.data:
             data["locationId"] = call.data[ATTR_LOCATION_ID]
 
-        # Get the coordinator from any entry (supports single config entry)
         for entry_id, coordinator in hass.data[DOMAIN].items():
             try:
                 result = await coordinator.client.async_create_work_order(data)
@@ -147,7 +132,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     call.data[ATTR_TITLE],
                     result.get("workOrder", {}).get("id", "unknown"),
                 )
-                # Refresh data
                 await coordinator.async_request_refresh()
             except Exception as err:
                 _LOGGER.error("Failed to create work order: %s", err)
@@ -155,7 +139,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             break
 
     async def async_update_work_order(call: ServiceCall) -> None:
-        """Update an existing work order in MaintainX."""
+        """Update an existing work order."""
         work_order_id = call.data[ATTR_WORK_ORDER_ID]
         data: dict[str, Any] = {}
 
@@ -182,9 +166,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.info("Updated MaintainX work order ID: %s", work_order_id)
                 await coordinator.async_request_refresh()
             except Exception as err:
-                _LOGGER.error(
-                    "Failed to update work order %s: %s", work_order_id, err
-                )
+                _LOGGER.error("Failed to update work order %s: %s", work_order_id, err)
                 raise
             break
 
@@ -200,9 +182,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.info("Completed MaintainX work order ID: %s", work_order_id)
                 await coordinator.async_request_refresh()
             except Exception as err:
-                _LOGGER.error(
-                    "Failed to complete work order %s: %s", work_order_id, err
-                )
+                _LOGGER.error("Failed to complete work order %s: %s", work_order_id, err)
                 raise
             break
 
@@ -214,44 +194,23 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for entry_id, coordinator in hass.data[DOMAIN].items():
             try:
                 await coordinator.client.async_add_comment(work_order_id, comment)
-                _LOGGER.info(
-                    "Added comment to MaintainX work order ID: %s", work_order_id
-                )
+                _LOGGER.info("Added comment to MaintainX work order ID: %s", work_order_id)
             except Exception as err:
-                _LOGGER.error(
-                    "Failed to add comment to work order %s: %s",
-                    work_order_id,
-                    err,
-                )
+                _LOGGER.error("Failed to add comment to work order %s: %s", work_order_id, err)
                 raise
             break
 
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_CREATE_WORK_ORDER,
-        async_create_work_order,
-        schema=CREATE_WORK_ORDER_SCHEMA,
+        DOMAIN, SERVICE_CREATE_WORK_ORDER, async_create_work_order, schema=CREATE_WORK_ORDER_SCHEMA,
     )
-
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_UPDATE_WORK_ORDER,
-        async_update_work_order,
-        schema=UPDATE_WORK_ORDER_SCHEMA,
+        DOMAIN, SERVICE_UPDATE_WORK_ORDER, async_update_work_order, schema=UPDATE_WORK_ORDER_SCHEMA,
     )
-
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_COMPLETE_WORK_ORDER,
-        async_complete_work_order,
-        schema=COMPLETE_WORK_ORDER_SCHEMA,
+        DOMAIN, SERVICE_COMPLETE_WORK_ORDER, async_complete_work_order, schema=COMPLETE_WORK_ORDER_SCHEMA,
     )
-
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_ADD_COMMENT,
-        async_add_comment,
-        schema=ADD_COMMENT_SCHEMA,
+        DOMAIN, SERVICE_ADD_COMMENT, async_add_comment, schema=ADD_COMMENT_SCHEMA,
     )
 
 
