@@ -68,24 +68,21 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # Add count sensors
     for description in SENSOR_DESCRIPTIONS:
         entities.append(
             MaintainXCountSensor(coordinator, description, entry.entry_id)
         )
 
-    # Add the recent work orders list sensor
     entities.append(
         MaintainXRecentWorkOrdersSensor(coordinator, entry.entry_id)
     )
 
-    # Add individual work order sensors for open/in-progress items
     if coordinator.data:
         active_orders = (
             coordinator.data.get("open_work_orders", [])
             + coordinator.data.get("in_progress_work_orders", [])
         )
-        for wo in active_orders[:50]:  # Limit to 50 individual sensors
+        for wo in active_orders[:50]:
             entities.append(
                 MaintainXWorkOrderSensor(coordinator, wo, entry.entry_id)
             )
@@ -111,21 +108,6 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        if self.coordinator.data is None:
-            return
-
-        key_map = {
-            "total_work_orders": "total_count",
-            "open_work_orders": "open_count",
-            "in_progress_work_orders": "in_progress_count",
-            "on_hold_work_orders": "on_hold_count",
-            "done_work_orders": "done_count",
-        }
-
-        data_key = key_map.get(self.entity_description.key)
-        if data_key:
-            self._attr_native_value = self.coordinator.data.get(data_key, 0)
-
         self.async_write_ha_state()
 
     @property
@@ -166,7 +148,6 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
         data_key = key_map.get(self.entity_description.key)
         if data_key:
             orders = self.coordinator.data.get(data_key, [])
-            # Include up to 20 work orders as attributes
             work_order_list = []
             for wo in orders[:20]:
                 work_order_list.append(
@@ -185,7 +166,7 @@ class MaintainXCountSensor(CoordinatorEntity, SensorEntity):
 
 
 class MaintainXRecentWorkOrdersSensor(CoordinatorEntity, SensorEntity):
-    """Sensor showing recent work orders as a list."""
+    """Sensor showing recent work orders."""
 
     def __init__(
         self,
@@ -201,7 +182,7 @@ class MaintainXRecentWorkOrdersSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Return the state — most recent work order title."""
+        """Return the state."""
         if self.coordinator.data is None:
             return "No data"
 
