@@ -1,0 +1,204 @@
+create_work_order:
+  name: Create Work Order
+  description: Create a new work order (job) in MaintainX
+  fields:
+    title:
+      name: Title
+      description: The title of the work order
+      required: true
+      example: "Printer ink replacement needed"
+      selector:
+        text:
+    description:
+      name: Description
+      description: Detailed description of the work order
+      required: false
+      example: "The main office printer is showing low ink warning. Replace all cartridges."
+      selector:
+        text:
+          multiline: true
+    priority:
+      name: Priority
+      description: Priority level of the work order
+      required: false
+      default: "NONE"
+      example: "HIGH"
+      selector:
+        select:
+          options:
+            - "NONE"
+            - "LOW"
+            - "MEDIUM"
+            - "HIGH"
+            - "CRITICAL"
+    category:
+      name: Category
+      description: Category of the work order
+      required: false
+      default: "DEFAULT"
+      example: "CORRECTIVE"
+      selector:
+        select:
+          options:
+            - "DAMAGE"
+            - "INSPECTION"
+            - "METER_READING"
+            - "PREVENTIVE"
+            - "PROJECT"
+            - "SAFETY"
+            - "UPGRADE"
+            - "CORRECTIVE"
+            - "DEFAULT"
+    assignee_id:
+      name: Assignee ID
+      description: The MaintainX user ID to assign the work order to
+      required: false
+      example: 12345
+      selector:
+        number:
+          min: 1
+          mode: box
+    asset_id:
+      name: Asset ID
+      description: The MaintainX asset ID to associate with the work order
+      required: false
+      example: 67890
+      selector:
+        number:
+          min: 1
+          mode: box
+    location_id:
+      name: Location ID
+      description: The MaintainX location ID for the work order
+      required: false
+      example: 11111
+      selector:
+        number:
+          min: 1
+          mode: box
+
+update_work_order:
+  name: Update Work Order
+  description: Update an existing work order in MaintainX
+  fields:
+    work_order_id:
+      name: Work Order ID
+      description: The ID of the work order to update
+      required: true
+      example: 12345
+      selector:
+        number:
+          min: 1
+          mode: box
+    title:
+      name: Title
+      description: New title for the work order
+      required: false
+      selector:
+        text:
+    description:
+      name: Description
+      description: New description for the work order
+      required: false
+      selector:
+        text:
+          multiline: true
+    priority:
+      name: Priority
+      description: New priority level
+      required: false
+      selector:
+        select:
+          options:
+            - "NONE"
+            - "LOW"
+            - "MEDIUM"
+            - "HIGH"
+            - "CRITICAL"
+    status:
+      name: Status
+      description: New status for the work order
+      required: false
+      selector:
+        select:
+          options:
+            - "OPEN"
+            - "IN_PROGRESS"
+            - "ON_HOLD"
+            - "DONE"
+    category:
+      name: Category
+      description: New category
+      required: false
+      selector:
+        select:
+          options:
+            - "DAMAGE"
+            - "INSPECTION"
+            - "METER_READING"
+            - "PREVENTIVE"
+            - "PROJECT"
+            - "SAFETY"
+            - "UPGRADE"
+            - "CORRECTIVE"
+            - "DEFAULT"
+    assignee_id:
+      name: Assignee ID
+      description: New assignee user ID
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+    asset_id:
+      name: Asset ID
+      description: New asset ID
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+    location_id:
+      name: Location ID
+      description: New location ID
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+
+complete_work_order:
+  name: Complete Work Order
+  description: Mark a work order as complete/done in MaintainX
+  fields:
+    work_order_id:
+      name: Work Order ID
+      description: The ID of the work order to complete
+      required: true
+      example: 12345
+      selector:
+        number:
+          min: 1
+          mode: box
+
+add_comment:
+  name: Add Comment to Work Order
+  description: Add a comment to an existing work order in MaintainX
+  fields:
+    work_order_id:
+      name: Work Order ID
+      description: The ID of the work order to comment on
+      required: true
+      example: 12345
+      selector:
+        number:
+          min: 1
+          mode: box
+    comment:
+      name: Comment
+      description: The comment text to add
+      required: true
+      example: "Ink cartridges have been ordered and will arrive tomorrow."
+      selector:
+        text:
+          multiline: true
