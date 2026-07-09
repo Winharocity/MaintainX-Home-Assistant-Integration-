@@ -87,7 +87,8 @@ def _extract_wo(wo):
     }
 
 
-def _extract_asset(a):
+def _extract_asset(a, all_work_orders=None):
+    """Extract asset details and compute safety status from related work orders."""
     if not a or not isinstance(a, dict):
         return {}
 
@@ -100,11 +101,72 @@ def _extract_asset(a):
     if isinstance(lr, dict) and lr:
         location = {"id": lr.get("id"), "name": lr.get("name", "Unknown")}
 
+    asset_id = a.get("id")
+    asset_status = a.get("status", "")
+
+    open_wos = []
+    critical_wos = []
+    high_wos = []
+    safety_wos = []
+
+    if all_work_orders and asset_id:
+        for wo in all_work_orders:
+            wo_asset = wo.get("asset")
+            wo_asset_id = None
+            if isinstance(wo_asset, dict):
+                wo_asset_id = wo_asset.get("id")
+            elif wo.get("assetId"):
+                wo_asset_id = wo.get("assetId")
+
+            if wo_asset_id == asset_id:
+                wo_status = wo.get("status", "")
+                if wo_status in ("OPEN", "IN_PROGRESS", "ON_HOLD"):
+                    priority = wo.get("priority", "NONE")
+                    cats = wo.get("categories", [])
+                    if isinstance(cats, str):
+                        cats = [cats]
+
+                    wo_summary = {
+                        "id": wo.get("id"),
+                        "title": wo.get("title", "Untitled"),
+                        "priority": priority,
+                        "status": wo_status,
+                        "description": wo.get("description", ""),
+                        "categories": cats,
+                    }
+                    open_wos.append(wo_summary)
+
+                    if priority == "CRITICAL":
+                        critical_wos.append(wo_summary)
+                    elif priority == "HIGH":
+                        high_wos.append(wo_summary)
+
+                    if "SAFETY" in cats or "DAMAGE" in cats:
+                        safety_wos.append(wo_summary)
+
+    is_offline = asset_status in ("OFFLINE", "OUT_OF_SERVICE", "DECOMMISSIONED")
+    has_critical = len(critical_wos) > 0
+    has_safety_issue = len(safety_wos) > 0
+
+    is_safe = not is_offline and not has_critical and not has_safety_issue
+
+    reasons = []
+    if is_offline:
+        reasons.append(f"Marked {asset_status.replace('_', ' ').title()}")
+    if has_critical:
+        for wo in critical_wos:
+            reasons.append(f"🔴 CRITICAL: {wo['title']}")
+    if has_safety_issue:
+        for wo in safety_wos:
+            if wo not in critical_wos:
+                cat_label = "SAFETY" if "SAFETY" in wo["categories"] else "DAMAGE"
+                reasons.append(f"⚠️ {cat_label}: {wo['title']}")
+
     return {
-        "id": a.get("id"),
+        "id": asset_id,
         "name": a.get("name", "Unknown"),
         "description": a.get("description", ""),
-        "status": a.get("status", "UNKNOWN"),
+        "status": asset_status,
         "serial_number": a.get("serialNumber"),
         "model": a.get("model"),
         "make": a.get("make"),
@@ -112,7 +174,14 @@ def _extract_asset(a):
         "categories": categories,
         "category": categories[0] if categories else "Uncategorized",
         "location": location,
-        "is_online": a.get("status") not in ("OFFLINE", "OUT_OF_SERVICE", "DECOMMISSIONED"),
+        "is_safe": is_safe,
+        "is_online": is_safe,
+        "reasons": reasons,
+        "open_work_orders": open_wos,
+        "open_wo_count": len(open_wos),
+        "critical_wo_count": len(critical_wos),
+        "high_wo_count": len(high_wos),
+        "safety_wo_count": len(safety_wos),
         "barcode": a.get("barcode"),
         "area": a.get("area"),
         "created_at": a.get("createdAt"),
@@ -135,7 +204,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for wo in active[:10]:
             entities.append(MaintainXWOSensor(coordinator, wo, entry.entry_id))
 
-        # Create individual asset sensors
         for asset in coordinator.data.get("assets", []):
             entities.append(MaintainXAssetSensor(coordinator, asset, entry.entry_id))
 
@@ -218,24 +286,19 @@ class MaintainXAssetsSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
         assets = self.coordinator.data.get("assets", [])
-        asset_list = [_extract_asset(a) for a in assets]
+        all_wos = self.coordinator.data.get("work_orders", [])
+        asset_list = [_extract_asset(a, all_wos) for a in assets]
 
-        categories = {}
-        for a in asset_list:
-            cat = a.get("category", "Uncategorized")
-            if cat not in categories:
-                categories[cat] = []
-            categories[cat].append(a)
-
-        online = len([a for a in asset_list if a.get("is_online")])
-        offline = len(asset_list) - online
+        safe = len([a for a in asset_list if a.get("is_safe")])
+        unsafe = len(asset_list) - safe
 
         return {
             "assets": asset_list,
-            "categories": categories,
             "total_count": len(asset_list),
-            "online_count": online,
-            "offline_count": offline,
+            "safe_count": safe,
+            "unsafe_count": unsafe,
+            "online_count": safe,
+            "offline_count": unsafe,
         }
 
 
@@ -286,39 +349,34 @@ class MaintainXAssetSensor(CoordinatorEntity, SensorEntity):
         self._attr_has_entity_name = True
         self._asset = asset
 
-    def _get_asset(self):
+    def _get_asset_data(self):
         if self.coordinator.data:
+            all_wos = self.coordinator.data.get("work_orders", [])
             for a in self.coordinator.data.get("assets", []):
                 if a.get("id") == self._asset_id:
-                    return a
-        return self._asset
+                    return _extract_asset(a, all_wos)
+        return _extract_asset(self._asset, [])
 
     @property
     def native_value(self):
-        a = self._get_asset()
-        if not a:
+        data = self._get_asset_data()
+        if not data:
             return "Unknown"
-        status = a.get("status", "")
-        if status in ("OFFLINE", "OUT_OF_SERVICE", "DECOMMISSIONED"):
-            return "Not Available"
-        return "Ready"
+        return "Safe to Use" if data.get("is_safe") else "NOT SAFE"
 
     @property
     def extra_state_attributes(self):
-        a = self._get_asset()
-        if not a:
-            return {}
-        return _extract_asset(a)
+        return self._get_asset_data() or {}
 
     @property
     def icon(self):
-        a = self._get_asset()
-        if not a:
+        data = self._get_asset_data()
+        if not data:
             return "mdi:package-variant"
-        name = str(a.get("name", "")).lower()
-        cats = " ".join(a.get("categories", []) or []).lower()
+        name = str(data.get("name", "")).lower()
+        cats = " ".join(data.get("categories", []) or []).lower()
         combined = f"{name} {cats}"
-        if any(w in combined for w in ["boat", "vessel", "yacht", "sail"]):
+        if any(w in combined for w in ["boat", "vessel", "yacht", "sail", "boomerang", "ultimate", "rover"]):
             return "mdi:sail-boat"
         elif any(w in combined for w in ["kayak", "canoe", "paddle"]):
             return "mdi:kayaking"
@@ -328,14 +386,12 @@ class MaintainXAssetSensor(CoordinatorEntity, SensorEntity):
             return "mdi:engine"
         elif any(w in combined for w in ["trailer"]):
             return "mdi:truck-trailer"
+        elif any(w in combined for w in ["safety", "life", "jacket", "flare"]):
+            return "mdi:shield-check"
         elif any(w in combined for w in ["tool"]):
             return "mdi:tools"
         elif any(w in combined for w in ["pump"]):
             return "mdi:water-pump"
-        elif any(w in combined for w in ["hvac", "air", "aircon"]):
-            return "mdi:air-conditioner"
         elif any(w in combined for w in ["printer"]):
             return "mdi:printer"
-        elif any(w in combined for w in ["computer", "pc", "laptop"]):
-            return "mdi:desktop-classic"
         return "mdi:package-variant"
