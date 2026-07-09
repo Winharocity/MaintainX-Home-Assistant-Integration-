@@ -91,7 +91,6 @@ def _extract_asset(a):
     if not a or not isinstance(a, dict):
         return {}
 
-    # Get open work orders count for this asset
     categories = a.get("categories", []) or []
     if isinstance(categories, str):
         categories = [categories]
@@ -135,6 +134,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         active = coordinator.data.get("open_work_orders", []) + coordinator.data.get("in_progress_work_orders", [])
         for wo in active[:10]:
             entities.append(MaintainXWOSensor(coordinator, wo, entry.entry_id))
+
+        # Create individual asset sensors
+        for asset in coordinator.data.get("assets", []):
+            entities.append(MaintainXAssetSensor(coordinator, asset, entry.entry_id))
 
     async_add_entities(entities, True)
 
@@ -217,7 +220,6 @@ class MaintainXAssetsSensor(CoordinatorEntity, SensorEntity):
         assets = self.coordinator.data.get("assets", [])
         asset_list = [_extract_asset(a) for a in assets]
 
-        # Group by category
         categories = {}
         for a in asset_list:
             cat = a.get("category", "Uncategorized")
@@ -225,7 +227,6 @@ class MaintainXAssetsSensor(CoordinatorEntity, SensorEntity):
                 categories[cat] = []
             categories[cat].append(a)
 
-        # Count statuses
         online = len([a for a in asset_list if a.get("is_online")])
         offline = len(asset_list) - online
 
@@ -272,3 +273,69 @@ class MaintainXWOSensor(CoordinatorEntity, SensorEntity):
             return {"DONE": "mdi:clipboard-check", "IN_PROGRESS": "mdi:clipboard-play",
                     "ON_HOLD": "mdi:clipboard-clock", "OPEN": "mdi:clipboard-alert"}.get(s, "mdi:clipboard-text")
         return "mdi:clipboard-text"
+
+
+class MaintainXAssetSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for an individual asset."""
+
+    def __init__(self, coordinator, asset, entry_id):
+        super().__init__(coordinator)
+        self._asset_id = asset.get("id")
+        self._attr_unique_id = f"{entry_id}_asset_{self._asset_id}"
+        self._attr_name = f"MaintainX Asset {asset.get('name', 'Unknown')}"
+        self._attr_has_entity_name = True
+        self._asset = asset
+
+    def _get_asset(self):
+        if self.coordinator.data:
+            for a in self.coordinator.data.get("assets", []):
+                if a.get("id") == self._asset_id:
+                    return a
+        return self._asset
+
+    @property
+    def native_value(self):
+        a = self._get_asset()
+        if not a:
+            return "Unknown"
+        status = a.get("status", "")
+        if status in ("OFFLINE", "OUT_OF_SERVICE", "DECOMMISSIONED"):
+            return "Not Available"
+        return "Ready"
+
+    @property
+    def extra_state_attributes(self):
+        a = self._get_asset()
+        if not a:
+            return {}
+        return _extract_asset(a)
+
+    @property
+    def icon(self):
+        a = self._get_asset()
+        if not a:
+            return "mdi:package-variant"
+        name = str(a.get("name", "")).lower()
+        cats = " ".join(a.get("categories", []) or []).lower()
+        combined = f"{name} {cats}"
+        if any(w in combined for w in ["boat", "vessel", "yacht", "sail"]):
+            return "mdi:sail-boat"
+        elif any(w in combined for w in ["kayak", "canoe", "paddle"]):
+            return "mdi:kayaking"
+        elif any(w in combined for w in ["car", "vehicle", "truck"]):
+            return "mdi:car"
+        elif any(w in combined for w in ["engine", "motor", "outboard"]):
+            return "mdi:engine"
+        elif any(w in combined for w in ["trailer"]):
+            return "mdi:truck-trailer"
+        elif any(w in combined for w in ["tool"]):
+            return "mdi:tools"
+        elif any(w in combined for w in ["pump"]):
+            return "mdi:water-pump"
+        elif any(w in combined for w in ["hvac", "air", "aircon"]):
+            return "mdi:air-conditioner"
+        elif any(w in combined for w in ["printer"]):
+            return "mdi:printer"
+        elif any(w in combined for w in ["computer", "pc", "laptop"]):
+            return "mdi:desktop-classic"
+        return "mdi:package-variant"
