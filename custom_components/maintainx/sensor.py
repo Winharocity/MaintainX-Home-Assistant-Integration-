@@ -88,7 +88,7 @@ def _extract_wo(wo):
 
 
 def _extract_asset(a, all_work_orders=None):
-    """Extract asset details and compute safety status from related work orders."""
+    """Extract asset details and compute safety status."""
     if not a or not isinstance(a, dict):
         return {}
 
@@ -102,6 +102,7 @@ def _extract_asset(a, all_work_orders=None):
         location = {"id": lr.get("id"), "name": lr.get("name", "Unknown")}
 
     asset_id = a.get("id")
+    asset_name = (a.get("name") or "").lower()
     asset_status = a.get("status", "")
 
     open_wos = []
@@ -111,44 +112,59 @@ def _extract_asset(a, all_work_orders=None):
 
     if all_work_orders and asset_id:
         for wo in all_work_orders:
+            wo_status = wo.get("status", "")
+            if wo_status not in ("OPEN", "IN_PROGRESS", "ON_HOLD"):
+                continue
+
+            matched = False
+
+            # Method 1: nested asset object
             wo_asset = wo.get("asset")
-            wo_asset_id = None
             if isinstance(wo_asset, dict):
-                wo_asset_id = wo_asset.get("id")
-            elif wo.get("assetId"):
-                wo_asset_id = wo.get("assetId")
+                if wo_asset.get("id") == asset_id:
+                    matched = True
 
-            if wo_asset_id == asset_id:
-                wo_status = wo.get("status", "")
-                if wo_status in ("OPEN", "IN_PROGRESS", "ON_HOLD"):
-                    priority = wo.get("priority", "NONE")
-                    cats = wo.get("categories", [])
-                    if isinstance(cats, str):
-                        cats = [cats]
+            # Method 2: assetId field
+            if not matched and wo.get("assetId") == asset_id:
+                matched = True
 
-                    wo_summary = {
-                        "id": wo.get("id"),
-                        "title": wo.get("title", "Untitled"),
-                        "priority": priority,
-                        "status": wo_status,
-                        "description": wo.get("description", ""),
-                        "categories": cats,
-                    }
-                    open_wos.append(wo_summary)
+            # Method 3: match by asset name in title or description
+            if not matched and asset_name and len(asset_name) > 3:
+                wo_title = (wo.get("title") or "").lower()
+                wo_desc = (wo.get("description") or "").lower()
+                if asset_name in wo_title or asset_name in wo_desc:
+                    matched = True
 
-                    if priority == "CRITICAL":
-                        critical_wos.append(wo_summary)
-                    elif priority == "HIGH":
-                        high_wos.append(wo_summary)
+            if matched:
+                priority = wo.get("priority", "NONE")
+                cats = wo.get("categories", [])
+                if isinstance(cats, str):
+                    cats = [cats]
 
-                    if "SAFETY" in cats or "DAMAGE" in cats:
-                        safety_wos.append(wo_summary)
+                wo_summary = {
+                    "id": wo.get("id"),
+                    "title": wo.get("title", "Untitled"),
+                    "priority": priority,
+                    "status": wo_status,
+                    "description": wo.get("description", ""),
+                    "categories": cats,
+                }
+                open_wos.append(wo_summary)
+
+                if priority == "CRITICAL":
+                    critical_wos.append(wo_summary)
+                elif priority == "HIGH":
+                    high_wos.append(wo_summary)
+
+                if "SAFETY" in cats or "DAMAGE" in cats:
+                    safety_wos.append(wo_summary)
 
     is_offline = asset_status in ("OFFLINE", "OUT_OF_SERVICE", "DECOMMISSIONED")
     has_critical = len(critical_wos) > 0
+    has_high = len(high_wos) > 0
     has_safety_issue = len(safety_wos) > 0
 
-    is_safe = not is_offline and not has_critical and not has_safety_issue
+    is_safe = not is_offline and not has_critical and not has_high and not has_safety_issue
 
     reasons = []
     if is_offline:
@@ -156,9 +172,12 @@ def _extract_asset(a, all_work_orders=None):
     if has_critical:
         for wo in critical_wos:
             reasons.append(f"🔴 CRITICAL: {wo['title']}")
+    if has_high:
+        for wo in high_wos:
+            reasons.append(f"🟠 HIGH: {wo['title']}")
     if has_safety_issue:
         for wo in safety_wos:
-            if wo not in critical_wos:
+            if wo not in critical_wos and wo not in high_wos:
                 cat_label = "SAFETY" if "SAFETY" in wo["categories"] else "DAMAGE"
                 reasons.append(f"⚠️ {cat_label}: {wo['title']}")
 
