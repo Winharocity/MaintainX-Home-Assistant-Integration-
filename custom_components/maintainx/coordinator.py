@@ -197,7 +197,12 @@ class MaintainXCoordinator(DataUpdateCoordinator):
             merged = []
             for wo in all_work_orders:
                 wo_id = wo.get("id")
-                merged.append(self._detail_cache.get(wo_id, wo))
+                if wo_id in self._detail_cache:
+                    # Update the cache with the fresh top-level data (like status)
+                    self._detail_cache[wo_id].update(wo)
+                    merged.append(self._detail_cache[wo_id])
+                else:
+                    merged.append(wo)
 
             self.work_orders = merged
 
