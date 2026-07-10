@@ -73,9 +73,13 @@ class MaintainXApiClient:
             raise UpdateFailed(f"Error creating work order: {err}") from err
 
     async def async_update_work_order(self, work_order_id: int, data):
+        url = f"{BASE_URL}/workorders/{work_order_id}"
+        # MaintainX requires a specific endpoint just for status changes
+        if "status" in data:
+            url = f"{url}/status"
         try:
             async with self._session.patch(
-                f"{BASE_URL}/workorders/{work_order_id}", headers=self._headers, json=data,
+                url, headers=self._headers, json=data,
             ) as response:
                 response.raise_for_status()
                 return await response.json()
