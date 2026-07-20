@@ -178,6 +178,7 @@ class MaintainXCoordinator(DataUpdateCoordinator):
         self.users: list[dict[str, Any]] = []
         self._detail_cache: dict[int, dict[str, Any]] = {}
         self._fetch_cycle: int = 0
+        self._force_asset_refresh: bool = False  # Flag to force asset refresh
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -209,7 +210,6 @@ class MaintainXCoordinator(DataUpdateCoordinator):
             for wo in all_work_orders:
                 wo_id = wo.get("id")
                 if wo_id in self._detail_cache:
-                    # Update the cache with the fresh top-level data (like status)
                     self._detail_cache[wo_id].update(wo)
                     merged.append(self._detail_cache[wo_id])
                 else:
@@ -223,11 +223,13 @@ class MaintainXCoordinator(DataUpdateCoordinator):
                 del self._detail_cache[k]
 
             # Rotate fetching assets/locations/users
-            if self._fetch_cycle == 0:
+            # If _force_asset_refresh is True, we fetch assets regardless of cycle
+            if self._fetch_cycle == 0 or self._force_asset_refresh:
                 try:
                     await asyncio.sleep(2)
                     r = await self.client.async_get_assets()
                     self.assets = r.get("assets", [])
+                    self._force_asset_refresh = False  # Reset flag
                 except Exception:
                     pass
             elif self._fetch_cycle == 1:
