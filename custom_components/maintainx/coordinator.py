@@ -86,6 +86,17 @@ class MaintainXApiClient:
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Error updating work order: {err}") from err
 
+    async def async_set_asset_status(self, asset_id: int, status: str):
+        """Set asset status (e.g., ONLINE, OFFLINE)."""
+        try:
+            async with self._session.post(
+                f"{BASE_URL}/assets/{asset_id}/statuses", headers=self._headers, json={"status": status},
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+        except aiohttp.ClientError as err:
+            raise UpdateFailed(f"Error setting asset status: {err}") from err
+
     async def async_add_comment(self, work_order_id: int, comment: str):
         try:
             async with self._session.post(
@@ -193,7 +204,7 @@ class MaintainXCoordinator(DataUpdateCoordinator):
                 if detail and isinstance(detail, dict) and detail.get("id"):
                     self._detail_cache[wo_id] = detail
 
-            # Merge
+            # Merge and update cache with fresh top-level data
             merged = []
             for wo in all_work_orders:
                 wo_id = wo.get("id")
