@@ -18,7 +18,6 @@ from .const import (
     CATEGORY_PROJECT, CATEGORY_SAFETY, CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT,
     SERVICE_ADD_COMMENT, SERVICE_COMPLETE_WORK_ORDER, SERVICE_CREATE_WORK_ORDER,
     SERVICE_UPDATE_WORK_ORDER, SERVICE_SET_STATUS,
-    STATUS_DONE, STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_OPEN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,7 +25,8 @@ _LOGGER = logging.getLogger(__name__)
 ALL_PRIORITIES = [PRIORITY_NONE, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL]
 ALL_CATEGORIES = [CATEGORY_DAMAGE, CATEGORY_INSPECTION, CATEGORY_METER_READING, CATEGORY_PREVENTIVE,
                   CATEGORY_PROJECT, CATEGORY_SAFETY, CATEGORY_UPGRADE, CATEGORY_CORRECTIVE, CATEGORY_DEFAULT]
-ALL_STATUSES = [STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_DONE]
+ALL_STATUSES = ["OPEN", "IN_PROGRESS", "ON_HOLD", "DONE"]
+ALL_ASSET_STATUSES = ["ONLINE", "OFFLINE", "IGNORE"]
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
@@ -101,7 +101,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_complete_work_order(call: ServiceCall) -> None:
         work_order_id = call.data[ATTR_WORK_ORDER_ID]
         for entry_id, coordinator in hass.data[DOMAIN].items():
-            await coordinator.client.async_update_work_order(work_order_id, {"status": STATUS_DONE})
+            await coordinator.client.async_update_work_order(work_order_id, {"status": "DONE"})
             _LOGGER.info("Completed MaintainX WO: %s", work_order_id)
             await coordinator.async_request_refresh()
             break
@@ -112,6 +112,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for entry_id, coordinator in hass.data[DOMAIN].items():
             await coordinator.client.async_update_work_order(work_order_id, {"status": status})
             _LOGGER.info("Set MaintainX WO %s to %s", work_order_id, status)
+            await coordinator.async_request_refresh()
+            break
+
+    async def async_set_asset_status(call: ServiceCall) -> None:
+        asset_id = call.data["asset_id"]
+        status = call.data["status"]
+        for entry_id, coordinator in hass.data[DOMAIN].items():
+            await coordinator.client.async_set_asset_status(asset_id, status)
+            _LOGGER.info("Set MaintainX Asset %s to %s", asset_id, status)
             await coordinator.async_request_refresh()
             break
 
@@ -158,6 +167,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             vol.Required(ATTR_STATUS): vol.In(ALL_STATUSES),
         }))
 
+    hass.services.async_register(DOMAIN, "set_asset_status", async_set_asset_status,
+        schema=vol.Schema({
+            vol.Required("asset_id"): cv.positive_int,
+            vol.Required("status"): vol.In(ALL_ASSET_STATUSES),
+        }))
+
     hass.services.async_register(DOMAIN, SERVICE_ADD_COMMENT, async_add_comment,
         schema=vol.Schema({
             vol.Required(ATTR_WORK_ORDER_ID): cv.positive_int,
@@ -168,5 +183,5 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 @callback
 def async_unload_services(hass: HomeAssistant) -> None:
     for s in [SERVICE_CREATE_WORK_ORDER, SERVICE_UPDATE_WORK_ORDER,
-              SERVICE_COMPLETE_WORK_ORDER, SERVICE_SET_STATUS, SERVICE_ADD_COMMENT]:
+              SERVICE_COMPLETE_WORK_ORDER, SERVICE_SET_STATUS, "set_asset_status", SERVICE_ADD_COMMENT]:
         hass.services.async_remove(DOMAIN, s)
