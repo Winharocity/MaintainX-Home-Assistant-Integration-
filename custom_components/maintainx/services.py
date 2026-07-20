@@ -121,6 +121,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for entry_id, coordinator in hass.data[DOMAIN].items():
             await coordinator.client.async_set_asset_status(asset_id, status)
             _LOGGER.info("Set MaintainX Asset %s to %s", asset_id, status)
+            # Force the coordinator to bypass the cycle and fetch assets immediately
+            coordinator._force_asset_refresh = True
             await coordinator.async_request_refresh()
             break
 
